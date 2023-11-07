@@ -212,7 +212,7 @@ class Ingress:
     def render(field: Field, color_map: dict, offset: bool, top: bool, output: list = []) -> list[dict]:
         data = {
             "type": "polygon",
-            "latLngs": [{"lat": portal.lat + field.level*0.0001*offset,"lng": portal.lng} for portal in field.portals],
+            "latLngs": [{"lat": portal.lat + 0.0001*offset*field.level, "lng": portal.lng} for portal in field.portals],
             "color": color_map.get(str(field.level), color_map["default"])
         }
         output.append(data)
@@ -220,8 +220,6 @@ class Ingress:
             output = Ingress.render(child, color_map, offset, top, output)
         
         return output
-
-    
     
 def help():
     print("Syntax: python main.py [-h] [-p comma_separated_list[<PV|...>]]")
