@@ -1,5 +1,7 @@
 ## TODO:
 - [x] object oriented base to build more features on top of (Tree, Field, Portal, Ingress)
+push to git
+
 
 input.json
 -> parse into (start, route, base, other) DONE
