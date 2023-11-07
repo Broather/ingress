@@ -37,13 +37,10 @@ class Portal:
         return self.label
         
 class Field:
-    def __init__(self, p1: Portal, p2: Portal, p3: Portal, level: int, color_map: dict, offset: bool = False) -> None:
+    def __init__(self, p1: Portal, p2: Portal, p3: Portal, level: int) -> None:
         self.children: list[Field] = []
         self.portals: list[Portal] = [p1,p2,p3]
         self.level: int = level
-        self.color_map = color_map
-        self.color: str = color_map.get(str(level), color_map["default"])
-        self.offset = offset
     
     def __repr__(self) -> str:
         return str({
@@ -104,7 +101,7 @@ class Field:
         """
         splits the Field on portal and returns a score based on the distribution of portals on each of the 3 new fields
         """
-        fields = [Field(*outer_portals, center_portal, self.level + 1, self.color_map, self.offset) for outer_portals in itertools.combinations(self.portals, 2)]
+        fields = [Field(*outer_portals, center_portal, self.level + 1) for outer_portals in itertools.combinations(self.portals, 2)]
         portal_counts = [field.count_portals() for field in fields]
         return max(portal_counts) - min(portal_counts)
 
@@ -116,7 +113,7 @@ class Field:
             scores.append(self.score(portal))
 
         center_portal = potencial_center_portals[my_argmin(scores)]
-        return [Field(*outer_portals, center_portal, self.level + 1, self.color_map, self.offset) for outer_portals in itertools.combinations(self.portals, 2)]
+        return [Field(*outer_portals, center_portal, self.level + 1) for outer_portals in itertools.combinations(self.portals, 2)]
 
     def recursive_split(self):
         if self.count_portals() > 0:
@@ -138,30 +135,8 @@ class Field:
 
             
 class Tree:
-    color_maps = {
-                "rainbow" :
-                    {"0": "#ff0000",
-                    "1": "#ff7300",
-                    "2": "#fff200",
-                    "3": "#44ff00",
-                    "4": "#00d0ff",
-                    "5": "#1900ff",
-                    "6": "#ff00f2",
-                    "default": "#ffffff"},
-                "ingress": 
-                    {"0": "#f0ff20",
-                    "1": "#ffb01c",
-                    "2": "#ef8733",
-                    "3": "#ff642c",
-                    "4": "#c80425",
-                    "5": "#ff0e82",
-                    "6": "#b300ff",
-                    "7": "#5100ff",
-                    "default": "#ffffff"},
-                "white": 
-                    {"default": "#ffffff"}}
-    def __init__(self, root_t: dict, color_map: str = "white", offset: bool = False) -> None:
-        self.root = Field(*Portal.from_IITC_polygon(root_t), 0, Tree.color_maps[color_map], offset)
+    def __init__(self, root_t: dict) -> None:
+        self.root = Field(*Portal.from_IITC_polygon(root_t), 0)
         self.root.recursive_split()
 
     def display(self, node=None):
@@ -173,10 +148,6 @@ class Tree:
         for child in node.children:
             self.display(child)
     
-    def output(self, file_path):
-        with open(file_path, "w") as f:
-            json.dump(self.root.recursive_output(), f, indent=2)
-
     def change_color(self, input: list[dict], _from: str, to: str) -> list[dict]:
         if input["color"] == _from:
             input["color"] = to
@@ -185,7 +156,28 @@ class Tree:
 
 class Ingress:
     used_portals: list[Portal] = []
-
+    color_maps = {
+        "rainbow" :
+            {"0": "#ff0000",
+            "1": "#ff7300",
+            "2": "#fff200",
+            "3": "#44ff00",
+            "4": "#00d0ff",
+            "5": "#1900ff",
+            "6": "#ff00f2",
+            "default": "#ffffff"},
+        "ingress": 
+            {"0": "#f0ff20",
+            "1": "#ffb01c",
+            "2": "#ef8733",
+            "3": "#ff642c",
+            "4": "#c80425",
+            "5": "#ff0e82",
+            "6": "#b300ff",
+            "7": "#5100ff",
+            "default": "#ffffff"},
+        "white": 
+            {"default": "#ffffff"}}
     @staticmethod
     def add_from_bkmrk(bkmrk: dict) -> None:
         for id in bkmrk:
@@ -215,6 +207,19 @@ class Ingress:
         other = [e for e in input if e["color"] != white]
 
         return (start, route, base_t, other)
+
+    @staticmethod
+    def render(field: Field, color_map: dict, offset: bool, top: bool, output: list = []) -> list[dict]:
+        data = {
+            "type": "polygon",
+            "latLngs": [{"lat": portal.lat + field.level*0.0001*offset,"lng": portal.lng} for portal in field.portals],
+            "color": color_map.get(str(field.level), color_map["default"])
+        }
+        output.append(data)
+        for child in field.children:
+            output = Ingress.render(child, color_map, offset, top, output)
+        
+        return output
 
     
     
@@ -292,8 +297,11 @@ def main(opts: list[tuple[str, str]], args):
     assert len(route) == 1, f"must have only one route, for now, {len(route)} detected"
     assert len(base_t) == 1, f"must have only one base triangle, for now, {len(base_t)} detected"
 
-    tree = Tree(base_t[0], "ingress", True)
-    tree.output("./output.json")
+    tree = Tree(base_t[0])
+    with open("./output.json", "w") as f:
+        json.dump(Ingress.render(tree.root, Ingress.color_maps["rainbow"], True, True), f, indent=2)
+    
+    # tree.output("./output.json")
     print("output.json created successfully")   
     
 if __name__ == "__main__":
