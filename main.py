@@ -191,33 +191,35 @@ class Ingress:
         for id in bkmrk:
             portal = Portal(bkmrk[id]["label"], *parse_latlng(bkmrk[id]["latlng"]))
             Ingress.used_portals.append(portal)
+    @staticmethod
+    def parse_input(input: list[dict]) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+        """
+        parses the contents of input.json (which chould be full of IITC draw objects)
+
+        Args:
+        input (list[dict])
+
+        Returns:
+        tuple: (start, route, base_t, other)
+        where:
+            start: white markers
+            route: white polylines
+            base_t: white polygons
+            other: any drawn elements that are not white
+        """
+        white = "#ffffff"
+
+        start = [e for e in input if e["type"] == "marker" and e["color"] == white]
+        route = [e for e in input if e["type"] == "polyline" and e["color"] == white]
+        base_t = [e for e in input if e["type"] == "polygon" and e["color"] == white]
+        other = [e for e in input if e["color"] != white]
+
+        return (start, route, base_t, other)
+
+    
     
 def help():
     print("Syntax: python main.py [-h] [-p comma_separated_list[<PV|...>]]")
-
-def parse_input(input: list[dict]) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
-    """
-    parses the contents of input.json (which chould be full of IITC draw objects)
-
-    Args:
-    input (list[dict])
-
-    Returns:
-    tuple: (start, route, base_t, other)
-    where:
-        start: white markers
-        route: white polylines
-        base_t: white polygons
-        other: any drawn elements that are not white
-    """
-    white = "#ffffff"
-
-    start = [e for e in input if e["type"] == "marker" and e["color"] == white]
-    route = [e for e in input if e["type"] == "polyline" and e["color"] == white]
-    base_t = [e for e in input if e["type"] == "polygon" and e["color"] == white]
-    other = [e for e in input if e["color"] != white]
-
-    return (start, route, base_t, other)
 
 def add_split(input: list, split: list[dict]) -> list:
         for triangle in split:
@@ -283,7 +285,7 @@ def main(opts: list[tuple[str, str]], args):
     with open('./input.json', 'r') as f:
         input: list[dict] = json.load(f)
 
-    start, route, base_t, other = parse_input(input)
+    start, route, base_t, other = Ingress.parse_input(input)
 
     assert len(Ingress.used_portals) > 0, f"no portals selected to split with, make sure you are using -p"
     assert len(start) == 1, f"must have only one starting point, for now, {len(start)} detected"
