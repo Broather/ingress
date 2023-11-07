@@ -6,3 +6,5 @@ NOTES.md
 __pycache__
 venv
 .vscode
+test.py
+test.json
