@@ -37,11 +37,13 @@ class Portal:
         return self.label
         
 class Field:
-    def __init__(self, p1: Portal, p2: Portal, p3: Portal, level: int, color: str) -> None:
+    def __init__(self, p1: Portal, p2: Portal, p3: Portal, level: int, color_map: dict, offset: bool = False) -> None:
         self.children: list[Field] = []
         self.portals: list[Portal] = [p1,p2,p3]
         self.level: int = level
-        self.color: str = color
+        self.color_map = color_map
+        self.color: str = color_map.get(str(level), color_map["default"])
+        self.offset = offset
     
     def __repr__(self) -> str:
         return str({
@@ -102,7 +104,7 @@ class Field:
         """
         splits the Field on portal and returns a score based on the distribution of portals on each of the 3 new fields
         """
-        fields = [Field(*outer_portals, center_portal, self.level + 1, self.color) for outer_portals in itertools.combinations(self.portals, 2)]
+        fields = [Field(*outer_portals, center_portal, self.level + 1, self.color_map, self.offset) for outer_portals in itertools.combinations(self.portals, 2)]
         portal_counts = [field.count_portals() for field in fields]
         return max(portal_counts) - min(portal_counts)
 
@@ -114,7 +116,7 @@ class Field:
             scores.append(self.score(portal))
 
         center_portal = potencial_center_portals[my_argmin(scores)]
-        return [Field(*outer_portals, center_portal, self.level + 1, self.color) for outer_portals in itertools.combinations(self.portals, 2)]
+        return [Field(*outer_portals, center_portal, self.level + 1, self.color_map, self.offset) for outer_portals in itertools.combinations(self.portals, 2)]
 
     def recursive_split(self):
         if self.count_portals() > 0:
@@ -125,7 +127,7 @@ class Field:
     def recursive_output(self, output: list = []):
         data = {
             "type": "polygon",
-            "latLngs": [{"lat": portal.lat,"lng": portal.lng} for portal in self.portals],
+            "latLngs": [{"lat": portal.lat + self.level*0.0001*self.offset,"lng": portal.lng} for portal in self.portals],
             "color": self.color
         }
         output.append(data)
@@ -136,8 +138,30 @@ class Field:
 
             
 class Tree:
-    def __init__(self, root_t: dict) -> None:
-        self.root = Field(*Portal.from_IITC_polygon(root_t), 0, root_t["color"])
+    color_maps = {
+                "rainbow" :
+                    {"0": "#ff0000",
+                    "1": "#ff7300",
+                    "2": "#fff200",
+                    "3": "#44ff00",
+                    "4": "#00d0ff",
+                    "5": "#1900ff",
+                    "6": "#ff00f2",
+                    "default": "#ffffff"},
+                "ingress": 
+                    {"0": "#f0ff20",
+                    "1": "#ffb01c",
+                    "2": "#ef8733",
+                    "3": "#ff642c",
+                    "4": "#c80425",
+                    "5": "#ff0e82",
+                    "6": "#b300ff",
+                    "7": "#5100ff",
+                    "default": "#ffffff"},
+                "white": 
+                    {"default": "#ffffff"}}
+    def __init__(self, root_t: dict, color_map: str = "white", offset: bool = False) -> None:
+        self.root = Field(*Portal.from_IITC_polygon(root_t), 0, Tree.color_maps[color_map], offset)
         self.root.recursive_split()
 
     def display(self, node=None):
@@ -266,7 +290,7 @@ def main(opts: list[tuple[str, str]], args):
     assert len(route) == 1, f"must have only one route, for now, {len(route)} detected"
     assert len(base_t) == 1, f"must have only one base triangle, for now, {len(base_t)} detected"
 
-    tree = Tree(base_t[0])
+    tree = Tree(base_t[0], "ingress", True)
     tree.output("./output.json")
     print("output.json created successfully")   
     
