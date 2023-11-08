@@ -5,23 +5,34 @@ import getopt, sys
 def my_argmin(lst: list) -> int:
     return list.index(lst, min(lst))
 
-def parse_latlng(latlng: str):
-    return [float(coordinate) for coordinate in latlng.split(",")]
-
-def get_label(latLng: dict):
-    for portal in Ingress.used_portals:
-        if portal.get_latlng() == latLng:
-            return portal.get_label()
-        
-    raise Exception(f"portal with {latLng} not found in used_portals")
-
 class Portal:
     @staticmethod
+    def from_latLng(latLng: dict):
+        """
+        returns Portal
+        """
+        return Portal(Ingress.get_label(latLng), *Ingress.parse_latLng(latLng))
+
+    @staticmethod
+    def from_IITC_marker_polyline(marker: dict, polyline: dict):
+        """
+        returns list[Portal]
+        """
+        print(f"marker: {marker}")
+        print(f"polyline: {polyline}")
+        start_portal = Portal(Ingress.get_label(marker["latLng"]), *Ingress.parse_latLng(marker["latLng"]))
+        
+        # return [Portal()]
+
+    @staticmethod
     def from_IITC_polygon(IITC_polygon: dict):
+        """
+        returns list[Portal]
+        """
         if IITC_polygon["type"] != "polygon":
             print(f"WARNING: from_IITC_polygon is attempting to parse type of {IITC_polygon['type']}")
         latLngs = IITC_polygon["latLngs"]
-        return [Portal(get_label(latLng), float(latLng["lat"]), float(latLng["lng"])) for latLng in latLngs]
+        return [Portal(Ingress.get_label(latLng), *Ingress.parse_latLng(latLng)) for latLng in latLngs]
 
     def __init__(self, label: str, lat: float, lng: float) -> None:
         self.label = label
@@ -132,20 +143,19 @@ class Field:
             output = child.recursive_output(output)
         
         return output
-
             
 class Tree:
     def __init__(self, root_t: dict) -> None:
         self.root = Field(*Portal.from_IITC_polygon(root_t), 0)
         self.root.recursive_split()
 
-    def display(self, node=None):
-        if node is None:
-            node = self.root
+    def display(self, field: Field = None):
+        if field is None:
+            field = self.root
 
-        print(f"{'    ' * node.level}{node.portals}")
+        print(f"{'    ' * field.level}{field.portals}")
 
-        for child in node.children:
+        for child in field.children:
             self.display(child)
     
     def change_color(self, input: list[dict], _from: str, to: str) -> list[dict]:
@@ -179,35 +189,60 @@ class Ingress:
         "white": 
             {"default": "#ffffff"}}
     @staticmethod
-    def add_from_bkmrk(bkmrk: dict) -> None:
-        for id in bkmrk:
-            portal = Portal(bkmrk[id]["label"], *parse_latlng(bkmrk[id]["latlng"]))
-            Ingress.used_portals.append(portal)
+    def get_label(latLng: dict):
+        for portal in Ingress.used_portals:
+            if portal.get_latlng() == latLng:
+                return portal.get_label()
+            
+        assert False, f"portal with {latLng} not found in used_portals"
+    
+    @staticmethod
+    def parse_lat_comma_lng(latlng: str):
+        return [float(coordinate) for coordinate in latlng.split(",")]
+
+    @staticmethod
+    def parse_latLng(latLng: dict) -> list[float]:
+        return [float(latLng["lat"]), float(latLng["lng"])]
+    
     @staticmethod
     def parse_input(input: list[dict]) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
         """
-        parses the contents of input.json (which chould be full of IITC draw objects)
+        parses the contents of input.json (which should be full of IITC copy/paste)
 
         Args:
         input (list[dict])
 
         Returns:
-        tuple: (start, route, base_t, other)
+        tuple: (portal_order, base_field, other)
         where:
-            start: white markers
-            route: white polylines
-            base_t: white polygons
+            portal_order: list[Portal]
+            base_field: Field
             other: any drawn elements that are not white
         """
         white = "#ffffff"
 
-        start = [e for e in input if e["type"] == "marker" and e["color"] == white]
-        route = [e for e in input if e["type"] == "polyline" and e["color"] == white]
-        base_t = [e for e in input if e["type"] == "polygon" and e["color"] == white]
+        markers = [e for e in input if e["type"] == "marker" and e["color"] == white]
+        polylines = [e for e in input if e["type"] == "polyline" and e["color"] == white]
+        assert len(markers) == len(polylines), f"ERROR: amount of markers and polylines should match markers: {len(markers)}, polylines: {len(polylines)}"
+        for marker, polyline in zip(markers, polylines):
+            # TODO: somewhere above figure out groups and parse as a group
+            portal_order = Portal.from_IITC_marker_polyline(marker, polyline)
+
+        polygons = [e for e in input if e["type"] == "polygon" and e["color"] == white]
+        for polygon in polygons:
+            # TODO: somewhere above figure out groups and parse as a group
+            base_field = Field(*Portal.from_IITC_polygon(polygon), 0)
+
         other = [e for e in input if e["color"] != white]
 
-        return (start, route, base_t, other)
+        return (portal_order, base_field, other)
 
+    @staticmethod
+    def add_from_bkmrk(bkmrk: dict) -> None:
+        for id in bkmrk:
+            portal = Portal(bkmrk[id]["label"], *Ingress.parse_lat_comma_lng(bkmrk[id]["latlng"]))
+            Ingress.used_portals.append(portal)
+            
     @staticmethod
     def render(field: Field, color_map: dict, offset: bool, top: bool, output: list = []) -> list[dict]:
         data = {
@@ -219,6 +254,19 @@ class Ingress:
         for child in field.children:
             output = Ingress.render(child, color_map, offset, top, output)
         
+        return output
+    
+    @staticmethod
+    def plan(tree: Tree, start: dict, route: dict) -> list[dict]: 
+        output = []
+        # TODO: make a list of links that need to be made
+        links = Ingress.get_links(tree)
+        # TODO: with start and route make the 
+        for portal in route:
+            output.append({
+                portal.label: "amount of keys needed",
+                "links": [link for link in links if link.contains(portal)]
+            })
         return output
     
 def help():
@@ -288,10 +336,10 @@ def main(opts: list[tuple[str, str]], args):
     with open('./input.json', 'r') as f:
         input: list[dict] = json.load(f)
 
-    start, route, base_t, other = Ingress.parse_input(input)
+    route, base_t, other = Ingress.parse_input(input)
+    
 
     assert len(Ingress.used_portals) > 0, f"no portals selected to split with, make sure you are using -p"
-    assert len(start) == 1, f"must have only one starting point, for now, {len(start)} detected"
     assert len(route) == 1, f"must have only one route, for now, {len(route)} detected"
     assert len(base_t) == 1, f"must have only one base triangle, for now, {len(base_t)} detected"
 
