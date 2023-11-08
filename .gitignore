@@ -2,9 +2,6 @@ plans
 portals
 input.json
 output.json
-NOTES.md
 __pycache__
 venv
 .vscode
-test.py
-test.json
