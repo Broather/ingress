@@ -1,6 +1,7 @@
 import json
 import itertools
 import getopt, sys
+import pyperclip
 
 def my_argmin(lst: list) -> int:
     return list.index(lst, min(lst))
@@ -185,8 +186,8 @@ class Ingress:
             "6": "#b300ff",
             "7": "#5100ff",
             "default": "#ffffff"},
-        "white": 
-            {"default": "#ffffff"}}
+        "gray": 
+            {"default": "#bbbbbb"}}
     @staticmethod
     def get_label(latLng: dict):
         for portal in Ingress.used_portals:
@@ -346,12 +347,13 @@ def main(opts: list[tuple[str, str]], args):
     assert len(Ingress.used_portals) > 0, f"no portals selected to split with, make sure you are using -p"
 
     tree = Tree(base_field)
-    output = Ingress.render(tree.root, Ingress.color_maps["rainbow"], False, True)
+    output = Ingress.render(tree.root, Ingress.color_maps["gray"], False, True)
     with open("./output.json", "w") as f:
-        json.dump(output, f, indent=2)
-    
-    # tree.output("./output.json")
+        json.dump(output + other, f, indent=2)
     print("output.json created successfully")   
+    
+    pyperclip.copy(json.dumps(output + other))
+    print("output coped to clipboard successfully")
     
 if __name__ == "__main__":
     opts, args = getopt.getopt(sys.argv[1:], "hp:", [])

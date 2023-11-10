@@ -17,6 +17,6 @@
     - [x] onlyleaves: renders only the top layer of each section (great with ingress color_map) #NOTE might be difficult to implement because need to split triangles if a portion of it is covered in a higher layer
         - [x] render only tree leaves
 
-- [ ] puts contents of output.json to clipboard as well
+- [x] puts contents of output.json to clipboard as well
 - [ ] main.py creates input.json and output.json if doesn't exists
 - [ ] add tutorial about adding portals and using the -p option
