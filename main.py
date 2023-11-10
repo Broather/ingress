@@ -6,6 +6,25 @@ def my_argmin(lst: list) -> int:
     return list.index(lst, min(lst))
 
 class Portal:
+    def __init__(self, label: str, lat: float, lng: float) -> None:
+        self.label = label
+        self.lat = lat
+        self.lng = lng
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Portal):
+            return self.lat == other.lat and self.lng == other.lng
+        else:
+            return False
+
+    def __repr__(self) -> str:
+        return f"{self.label.replace(' ', '_')}"
+
+    def get_latlng(self) -> dict:
+        return {"lat": self.lat, "lng": self.lng}
+    def get_label(self) -> str:
+        return self.label
+    
     @staticmethod
     def from_latLng(latLng: dict):
         """
@@ -18,11 +37,16 @@ class Portal:
         """
         returns list[Portal]
         """
-        print(f"marker: {marker}")
-        print(f"polyline: {polyline}")
         start_portal = Portal(Ingress.get_label(marker["latLng"]), *Ingress.parse_latLng(marker["latLng"]))
-        
-        # return [Portal()]
+        latLngs = polyline["latLngs"]
+        route_portals = [Portal(Ingress.get_label(latLng), *Ingress.parse_latLng(latLng)) for latLng in latLngs]
+
+        if route_portals[0] == start_portal:
+            return route_portals
+        elif route_portals[-1] == start_portal:
+            return route_portals[::-1]
+        else:
+            assert False, "ERROR: a polyline's beginning and end does not match a marker's coordinates"
 
     @staticmethod
     def from_IITC_polygon(IITC_polygon: dict):
@@ -33,19 +57,6 @@ class Portal:
             print(f"WARNING: from_IITC_polygon is attempting to parse type of {IITC_polygon['type']}")
         latLngs = IITC_polygon["latLngs"]
         return [Portal(Ingress.get_label(latLng), *Ingress.parse_latLng(latLng)) for latLng in latLngs]
-
-    def __init__(self, label: str, lat: float, lng: float) -> None:
-        self.label = label
-        self.lat = lat
-        self.lng = lng
-
-    def __repr__(self) -> str:
-        return f"{self.label.replace(' ', '_')}"
-
-    def get_latlng(self) -> dict:
-        return {"lat": self.lat, "lng": self.lng}
-    def get_label(self) -> str:
-        return self.label
         
 class Field:
     def __init__(self, p1: Portal, p2: Portal, p3: Portal, level: int) -> None:
@@ -63,7 +74,7 @@ class Field:
 
     def is_in(self, portal: Portal) -> bool:
         """
-        Check if a Portal is inside a Field on Earth's surface. (made by GPT3)
+        Check if a Portal is inside the Field on Earth's surface. (made by GPT3)
 
         Args:
         self Field: contains data about portals it contains
@@ -106,7 +117,7 @@ class Field:
         return (w1 >= 0) and (w2 >= 0) and (w3 >= 0)
 
     def count_portals(self):
-        return sum(list(map(self.is_in, Ingress.used_portals))) # [is_in(*(portal_1, polygon)), is_in(*(portal_2, polygon)), ...]
+        return sum(list(map(self.is_in, Ingress.used_portals)))
 
     def score(self, center_portal: Portal) -> int:
         """
@@ -133,8 +144,8 @@ class Field:
                 child.grow()
 
 class Tree:
-    def __init__(self, root_t: dict) -> None:
-        self.root = Field(*Portal.from_IITC_polygon(root_t), 0)
+    def __init__(self, root: Field) -> None:
+        self.root = root
         self.root.grow()
 
     def display(self, field: Field = None):
@@ -209,14 +220,15 @@ class Ingress:
         """
         white = "#ffffff"
 
-        markers = [e for e in input if e["type"] == "marker" and e["color"] == white]
-        polylines = [e for e in input if e["type"] == "polyline" and e["color"] == white]
+        markers = [IITC_element for IITC_element in input if IITC_element["type"] == "marker" and IITC_element["color"] == white]
+        polylines = [IITC_element for IITC_element in input if IITC_element["type"] == "polyline" and IITC_element["color"] == white]
         assert len(markers) == len(polylines), f"ERROR: amount of markers and polylines should match markers: {len(markers)}, polylines: {len(polylines)}"
+
         for marker, polyline in zip(markers, polylines):
             # TODO: somewhere above figure out groups and parse as a group
             portal_order = Portal.from_IITC_marker_polyline(marker, polyline)
 
-        polygons = [e for e in input if e["type"] == "polygon" and e["color"] == white]
+        polygons = [IITC_element for IITC_element in input if IITC_element["type"] == "polygon" and IITC_element["color"] == white]
         for polygon in polygons:
             # TODO: somewhere above figure out groups and parse as a group
             base_field = Field(*Portal.from_IITC_polygon(polygon), 0)
@@ -225,12 +237,6 @@ class Ingress:
 
         return (portal_order, base_field, other)
 
-    @staticmethod
-    def add_from_bkmrk(bkmrk: dict) -> None:
-        for id in bkmrk:
-            portal = Portal(bkmrk[id]["label"], *Ingress.parse_lat_comma_lng(bkmrk[id]["latlng"]))
-            Ingress.used_portals.append(portal)
-            
     @staticmethod
     def render(field: Field, color_map: dict, offset: bool, top: bool, output: list = []) -> list[dict]:
         data = {
@@ -256,6 +262,12 @@ class Ingress:
                 "links": [link for link in links if link.contains(portal)]
             })
         return output
+    
+    @classmethod
+    def add_from_bkmrk(cls, bkmrk: dict) -> None:
+        for id in bkmrk:
+            portal = Portal(bkmrk[id]["label"], *Ingress.parse_lat_comma_lng(bkmrk[id]["latlng"]))
+            cls.used_portals.append(portal)
     
 def help():
     print("Syntax: python main.py [-h] [-p comma_separated_list[<PV|...>]]")
@@ -324,14 +336,11 @@ def main(opts: list[tuple[str, str]], args):
     with open('./input.json', 'r') as f:
         input: list[dict] = json.load(f)
 
-    route, base_t, other = Ingress.parse_input(input)
+    portal_order, base_field, other = Ingress.parse_input(input)
     
-
     assert len(Ingress.used_portals) > 0, f"no portals selected to split with, make sure you are using -p"
-    assert len(route) == 1, f"must have only one route, for now, {len(route)} detected"
-    assert len(base_t) == 1, f"must have only one base triangle, for now, {len(base_t)} detected"
 
-    tree = Tree(base_t[0])
+    tree = Tree(base_field)
     with open("./output.json", "w") as f:
         json.dump(Ingress.render(tree.root, Ingress.color_maps["rainbow"], True, True), f, indent=2)
     
