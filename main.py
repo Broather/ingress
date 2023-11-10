@@ -126,28 +126,16 @@ class Field:
         center_portal = potencial_center_portals[my_argmin(scores)]
         return [Field(*outer_portals, center_portal, self.level + 1) for outer_portals in itertools.combinations(self.portals, 2)]
 
-    def recursive_split(self):
+    def grow(self):
         if self.count_portals() > 0:
             self.children = self.split()
             for child in self.children:
-                child.recursive_split()
+                child.grow()
 
-    def recursive_output(self, output: list = []):
-        data = {
-            "type": "polygon",
-            "latLngs": [{"lat": portal.lat + self.level*0.0001*self.offset,"lng": portal.lng} for portal in self.portals],
-            "color": self.color
-        }
-        output.append(data)
-        for child in self.children:
-            output = child.recursive_output(output)
-        
-        return output
-            
 class Tree:
     def __init__(self, root_t: dict) -> None:
         self.root = Field(*Portal.from_IITC_polygon(root_t), 0)
-        self.root.recursive_split()
+        self.root.grow()
 
     def display(self, field: Field = None):
         if field is None:
