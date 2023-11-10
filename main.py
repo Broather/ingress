@@ -96,9 +96,9 @@ class Field:
 
         a, b, c = self.portals
 
-        assert a.lat != b.lat and a.lng != b.lng, "trangle points have same value: (a and b)"
-        assert a.lat != c.lat and a.lng != c.lng, "trangle points have same value: (a and c)"
-        assert b.lat != c.lat and b.lng != c.lng, "trangle points have same value: (b and c)"
+        assert a.lat != b.lat and a.lng != b.lng, "ERROR: Field has 2 Portls in the same location: (a and b)"
+        assert a.lat != c.lat and a.lng != c.lng, "ERROR: Field has 2 Portls in the same location: (a and c)"
+        assert b.lat != c.lat and b.lng != c.lng, "ERROR: Field has 2 Portls in the same location: (b and c)"
 
         d1 = sign(portal, a, b)
         d2 = sign(portal, b, c)
@@ -238,15 +238,20 @@ class Ingress:
         return (portal_order, base_field, other)
 
     @staticmethod
-    def render(field: Field, color_map: dict, offset: bool, top: bool, output: list = []) -> list[dict]:
-        data = {
-            "type": "polygon",
-            "latLngs": [{"lat": portal.lat + 0.0001*offset*field.level, "lng": portal.lng} for portal in field.portals],
-            "color": color_map.get(str(field.level), color_map["default"])
-        }
-        output.append(data)
+    def render(field: Field, color_map: dict, offset: bool, onlyleaves: bool, output: list = []) -> list[dict]:
+        if offset and onlyleaves and field.level == 0: print("WARNING: having offset and onlyleaves enabled at the same time makes 0 sense")
+
+        is_leaf = len(field.children) == 0
+        if not onlyleaves or (onlyleaves and is_leaf):
+            data = {
+                "type": "polygon",
+                "latLngs": [{"lat": portal.lat + 0.0001*offset*field.level, "lng": portal.lng} for portal in field.portals],
+                "color": color_map.get(str(field.level), color_map["default"])
+            }
+            output.append(data)
+
         for child in field.children:
-            output = Ingress.render(child, color_map, offset, top, output)
+            output = Ingress.render(child, color_map, offset, onlyleaves, output)
         
         return output
     
@@ -341,8 +346,9 @@ def main(opts: list[tuple[str, str]], args):
     assert len(Ingress.used_portals) > 0, f"no portals selected to split with, make sure you are using -p"
 
     tree = Tree(base_field)
+    output = Ingress.render(tree.root, Ingress.color_maps["rainbow"], False, True)
     with open("./output.json", "w") as f:
-        json.dump(Ingress.render(tree.root, Ingress.color_maps["rainbow"], True, True), f, indent=2)
+        json.dump(output, f, indent=2)
     
     # tree.output("./output.json")
     print("output.json created successfully")   
