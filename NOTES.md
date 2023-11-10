@@ -17,6 +17,9 @@
     - [x] onlyleaves: renders only the top layer of each section (great with ingress color_map) #NOTE might be difficult to implement because need to split triangles if a portion of it is covered in a higher layer
         - [x] render only tree leaves
 
+- [ ] make multi-Trees for multi-fields
+    - [ ] parse_input smartly groups marker, polyline and polygon and returns list of groups to be made into trees
+- [x] pass render options through getopt
 - [x] puts contents of output.json to clipboard as well
 - [ ] main.py creates input.json and output.json if doesn't exists
 - [ ] add tutorial about adding portals and using the -p option

@@ -169,13 +169,12 @@ class Ingress:
     color_maps = {
         "rainbow" :
             {"0": "#ff0000",
-            "1": "#ff7300",
-            "2": "#fff200",
-            "3": "#44ff00",
-            "4": "#00d0ff",
-            "5": "#1900ff",
-            "6": "#ff00f2",
-            "default": "#ffffff"},
+            "1": "#ffff00",
+            "2": "#00ff00",
+            "3": "#00ffff",
+            "4": "#0000ff",
+            "5": "#ff00ff",
+            "default": "#bbbbbb"},
         "ingress": 
             {"0": "#f0ff20",
             "1": "#ffb01c",
@@ -185,7 +184,7 @@ class Ingress:
             "5": "#ff0e82",
             "6": "#b300ff",
             "7": "#5100ff",
-            "default": "#ffffff"},
+            "default": "#bbbbbb"},
         "gray": 
             {"default": "#bbbbbb"}}
     @staticmethod
@@ -325,7 +324,9 @@ portal_group_map = {
 
 def main(opts: list[tuple[str, str]], args):
     # defaults part
-    
+    color_map = Ingress.color_maps["gray"]
+    offset = False
+    onlyleaves = False
     # option parsing part
     
     for o, a in opts:
@@ -336,6 +337,14 @@ def main(opts: list[tuple[str, str]], args):
             for portal_group in a.split(","):
                 with open(portal_group_map[portal_group.strip()], "r", encoding='utf-8') as f:
                     Ingress.add_from_bkmrk(json.load(f)['portals']['idOthers']['bkmrk'])
+        elif o == "-c":
+            if a in Ingress.color_maps.keys():
+                color_map = Ingress.color_maps[a]
+            else: print(f"WARNING: color map {a} not recognised")
+        elif o == "-o":
+            offset = True
+        elif o == "-l":
+            onlyleaves = True
         else:
             assert False, f"unsupported option: {o}"
     
@@ -347,7 +356,7 @@ def main(opts: list[tuple[str, str]], args):
     assert len(Ingress.used_portals) > 0, f"no portals selected to split with, make sure you are using -p"
 
     tree = Tree(base_field)
-    output = Ingress.render(tree.root, Ingress.color_maps["gray"], False, True)
+    output = Ingress.render(tree.root, color_map, offset, onlyleaves)
     with open("./output.json", "w") as f:
         json.dump(output + other, f, indent=2)
     print("output.json created successfully")   
@@ -356,5 +365,5 @@ def main(opts: list[tuple[str, str]], args):
     print("output coped to clipboard successfully")
     
 if __name__ == "__main__":
-    opts, args = getopt.getopt(sys.argv[1:], "hp:", [])
+    opts, args = getopt.getopt(sys.argv[1:], "hp:c:ol", [])
     main(opts, args)
