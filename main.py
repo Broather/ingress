@@ -70,7 +70,6 @@ class Field:
             "children": self.children,
             "portals": self.portals,
             "level": self.level,
-            "color": self.color
             })
 
     def is_in(self, portal: Portal) -> bool:
@@ -204,7 +203,7 @@ class Ingress:
         return [float(latLng["lat"]), float(latLng["lng"])]
     
     @staticmethod
-    def parse_input(input: list[dict]) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+    def parse_input(IITC_elements: list[dict]) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
         """
         parses the contents of input.json (which should be full of IITC copy/paste)
 
@@ -215,27 +214,30 @@ class Ingress:
         tuple: (portal_order, base_field, other)
         where:
             portal_order: list[Portal]
-            base_field: Field
+            base_fields: list[Field]
             other: any drawn elements that are not white
         """
         white = "#ffffff"
+        # Markers share a portal with a polygon and polyline
+        # Polylines share it's beginning and end portals with a polygon and every other portala is in the polygon
+        # Polygons don't overlap
+                
+        markers = [e for e in IITC_elements if e["type"] == "marker" and e["color"] == white]
+        polylines = [e for e in IITC_elements if e["type"] == "polyline" and e["color"] == white]
+        assert len(markers) == len(polylines), f"ERROR: amount of markers and polylines should match! markers: {len(markers)}, polylines: {len(polylines)}"
 
-        markers = [IITC_element for IITC_element in input if IITC_element["type"] == "marker" and IITC_element["color"] == white]
-        polylines = [IITC_element for IITC_element in input if IITC_element["type"] == "polyline" and IITC_element["color"] == white]
-        assert len(markers) == len(polylines), f"ERROR: amount of markers and polylines should match markers: {len(markers)}, polylines: {len(polylines)}"
+        polygons = [e for e in IITC_elements if e["type"] == "polygon" and e["color"] == white]
+        assert len(polygons) == len(markers), f"ERROR: amount of polygons and (marker, polyline) pairs should match: polygons: {len(polygons)}, marker-polyline: {len(markers)} "
 
-        for marker, polyline in zip(markers, polylines):
-            # TODO: somewhere above figure out groups and parse as a group
+        groups = []
+        for marker, polyline, polygon in zip(markers, polylines, polygons):
             portal_order = Portal.from_IITC_marker_polyline(marker, polyline)
-
-        polygons = [IITC_element for IITC_element in input if IITC_element["type"] == "polygon" and IITC_element["color"] == white]
-        for polygon in polygons:
-            # TODO: somewhere above figure out groups and parse as a group
             base_field = Field(*Portal.from_IITC_polygon(polygon), 0)
+            groups.append((portal_order, base_field))
 
-        other = [e for e in input if e["color"] != white]
+        other = [e for e in IITC_elements if e["color"] != white]
 
-        return (portal_order, base_field, other)
+        return (groups, other)
 
     @staticmethod
     def render(field: Field, color_map: dict, offset: bool, onlyleaves: bool, output: list = []) -> list[dict]:
@@ -327,6 +329,7 @@ def main(opts: list[tuple[str, str]], args):
     color_map = Ingress.color_maps["gray"]
     offset = False
     onlyleaves = False
+    ignore_plan = False
     # option parsing part
     
     for o, a in opts:
@@ -351,12 +354,15 @@ def main(opts: list[tuple[str, str]], args):
     with open('./input.json', 'r') as f:
         input: list[dict] = json.load(f)
 
-    portal_order, base_field, other = Ingress.parse_input(input)
+    groups, other = Ingress.parse_input(input)
     
     assert len(Ingress.used_portals) > 0, f"no portals selected to split with, make sure you are using -p"
 
-    tree = Tree(base_field)
-    output = Ingress.render(tree.root, color_map, offset, onlyleaves)
+    output = []
+    for group in groups:
+        portal_order, base_field = group
+        tree = Tree(base_field)
+        output += Ingress.render(tree.root, color_map, offset, onlyleaves)
     with open("./output.json", "w") as f:
         json.dump(output + other, f, indent=2)
     print("output.json created successfully")   
