@@ -8,7 +8,7 @@ def my_argmin(lst: list) -> int:
 
 class Portal:
     def __init__(self, label: str, lat: float, lng: float) -> None:
-        self.label = label
+        self.label = label.replace(' ', '_')
         self.lat = lat
         self.lng = lng
 
@@ -19,7 +19,7 @@ class Portal:
             return False
 
     def __repr__(self) -> str:
-        return f"{self.label.replace(' ', '_')}"
+        return f"{self.label}"
 
     def get_latlng(self) -> dict:
         return {"lat": self.lat, "lng": self.lng}
@@ -259,19 +259,10 @@ class Ingress:
             output = Ingress.render(child, color_map, offset, onlyleaves, output)
         
         return output
-    
     @staticmethod
-    def plan(tree: Tree, start: dict, route: dict) -> list[dict]: 
-        output = []
-        # TODO: make a list of links that need to be made
-        links = Ingress.get_links(tree)
-        # TODO: with start and route make the 
-        for portal in route:
-            output.append({
-                portal.label: "amount of keys needed",
-                "links": [link for link in links if link.contains(portal)]
-            })
-        return output
+    def plan(tree: Tree, portal_order: list[Portal]):
+        portal_labels = [portal.get_label() for portal in portal_order]
+        return dict.fromkeys(portal_labels, {"keys": 0, "links": []})
     
     @classmethod
     def add_from_bkmrk(cls, bkmrk: dict) -> None:
@@ -325,17 +316,24 @@ def main(opts: list[tuple[str, str]], args):
     assert len(Ingress.used_portals) > 0, f"no portals selected to split with, make sure you are using -p"
 
     output = []
+    plan = []
     for group in groups:
         portal_order, base_field = group
         tree = Tree(base_field)
+
         output += Ingress.render(tree.root, color_map, offset, onlyleaves)
+        plan.append(Ingress.plan(tree, portal_order))
         
     with open("./output.json", "w") as f:
         json.dump(output + other, f, indent=2)
     print("output.json created successfully")   
     
+    with open("./plan.json", "w", encoding="utf-8") as f:
+        json.dump(plan, f, indent=2, ensure_ascii=False)
+    print("plan.json created successfully")   
+    
     pyperclip.copy(json.dumps(output + other))
-    print("output coped to clipboard successfully")
+    print("output copied to clipboard successfully")
     
 if __name__ == "__main__":
     opts, args = getopt.getopt(sys.argv[1:], "hp:c:ol", [])
