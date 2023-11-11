@@ -118,6 +118,9 @@ class Field:
 
     def count_portals(self):
         return sum(list(map(self.is_in, Ingress.used_portals)))
+    
+    def get_inside_portals(self):
+        return [portal for portal in Ingress.used_portals if self.is_in(portal)]
 
     def score(self, center_portal: Portal) -> int:
         """
@@ -259,8 +262,19 @@ class Ingress:
             output = Ingress.render(child, color_map, offset, onlyleaves, output)
         
         return output
+
     @staticmethod
     def plan(tree: Tree, portal_order: list[Portal]):
+        root = tree.root
+        all_root_portals = root.get_inside_portals() + root.portals
+        # assure that portal_order contains root.portals
+        if not all([portal in portal_order for portal in root.portals]):
+            print(f"WARNING: route does not go to all field portals for field: {root.portals}")
+        # assure that every portal in root is also present in portal_order
+        if len(all_root_portals) != len(portal_order):
+            print(f"WARNING: route missed {len(all_root_portals) - len(portal_order)} portals in field: {root.portals}")
+
+
         portal_labels = [portal.get_label() for portal in portal_order]
         return dict.fromkeys(portal_labels, {"keys": 0, "links": []})
     
@@ -306,7 +320,7 @@ def main(opts: list[tuple[str, str]], args):
         elif o == "-l":
             onlyleaves = True
         else:
-            assert False, f"unsupported option: {o}"
+            assert False, f"ERROR: unsupported option: {o}"
     
     with open('./input.json', 'r') as f:
         input: list[dict] = json.load(f)
@@ -328,12 +342,12 @@ def main(opts: list[tuple[str, str]], args):
         json.dump(output + other, f, indent=2)
     print("output.json created successfully")   
     
+    pyperclip.copy(json.dumps(output + other))
+    print("output copied to clipboard successfully")
+
     with open("./plan.json", "w", encoding="utf-8") as f:
         json.dump(plan, f, indent=2, ensure_ascii=False)
     print("plan.json created successfully")   
-    
-    pyperclip.copy(json.dumps(output + other))
-    print("output copied to clipboard successfully")
     
 if __name__ == "__main__":
     opts, args = getopt.getopt(sys.argv[1:], "hp:c:ol", [])
