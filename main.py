@@ -186,6 +186,9 @@ class Ingress:
             "default": "#bbbbbb"},
         "gray": 
             {"default": "#bbbbbb"}}
+    portal_group_map = {
+        "PV": "./portals/pavilosta.json"}
+    
     @staticmethod
     def get_label(latLng: dict):
         for portal in Ingress.used_portals:
@@ -277,68 +280,31 @@ class Ingress:
             cls.used_portals.append(portal)
     
 def help():
-    print("Syntax: python main.py [-h] [-p comma_separated_list[<PV|...>]]")
-
-def add_split(input: list, split: list[dict]) -> list:
-        for triangle in split:
-            input.append(triangle)
-        return input
-
-def score_distibution(lst: list) -> int:
-    return max(lst) - min(lst)
-
-def my_argmin(lst: list) -> int:
-    return list.index(lst, min(lst))
-
-def split(center_portal: Portal, field: dict) -> list[dict]:
-    center_portal_latlng = center_portal.get_latlng()
-    field_latlng = field['latLngs']
-
-    assert len(field_latlng) == 3, f"field must have exactly 3 portals  , this one has {len(field_latlng)}"
-    
-    latlng_combinations = list(itertools.combinations(field_latlng, 2))
-    return [{
-        "type": "polygon",
-        "latLngs": [
-            center_portal_latlng,
-            *latlng_combinations[0]
-        ],
-        "color": "#bbbbbb"
-    },{
-        "type": "polygon",
-        "latLngs": [
-            center_portal_latlng,
-            *latlng_combinations[1]
-        ],
-        "color": "#bbbbbb"
-    },{
-        "type": "polygon",
-        "latLngs": [
-            center_portal_latlng,
-            *latlng_combinations[2]
-        ],
-        "color": "#bbbbbb"
-    }]
-
-portal_group_map = {
-    "PV": "./portals/pavilosta.json"
-}
+    # c:ol
+    print("Syntax: python main.py [-hol] [-p comma_separated_list[<PV|...>]] [-c <rainbow|ingress|gray>]")
+    print("""
+    Options:
+        h: calls this help function
+        o: adds an offset to layers so it's easier to tell them apart
+        l: display only the leaf fields, aka the top most layer of each section
+        p: defines which portal groups to use in making fields (only way I could think of to get portal data here)
+        c: selects the color map to use, default is gray for all layers
+    """)
 
 def main(opts: list[tuple[str, str]], args):
     # defaults part
     color_map = Ingress.color_maps["gray"]
     offset = False
     onlyleaves = False
-    ignore_plan = False
-    # option parsing part
     
+    # option parsing part
     for o, a in opts:
         if o == "-h":
             help()
             sys.exit(2)
         elif o == "-p":
             for portal_group in a.split(","):
-                with open(portal_group_map[portal_group.strip()], "r", encoding='utf-8') as f:
+                with open(Ingress.portal_group_map[portal_group.strip()], "r", encoding='utf-8') as f:
                     Ingress.add_from_bkmrk(json.load(f)['portals']['idOthers']['bkmrk'])
         elif o == "-c":
             if a in Ingress.color_maps.keys():
@@ -363,6 +329,7 @@ def main(opts: list[tuple[str, str]], args):
         portal_order, base_field = group
         tree = Tree(base_field)
         output += Ingress.render(tree.root, color_map, offset, onlyleaves)
+        
     with open("./output.json", "w") as f:
         json.dump(output + other, f, indent=2)
     print("output.json created successfully")   
