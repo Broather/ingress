@@ -299,7 +299,6 @@ class Ingress:
             cls.used_portals.append(portal)
     
 def help():
-    # c:ol
     print("Syntax: python main.py [-hol] [-p comma_separated_list[<PV|...>]] [-c <rainbow|ingress|gray>]")
     print("""
     Options:
@@ -339,9 +338,8 @@ def main(opts: list[tuple[str, str]], args):
     with open('./input.json', 'r') as f:
         input: list[dict] = json.load(f)
 
-    groups, other = Ingress.parse_input(input)
-    
     assert len(Ingress.used_portals) > 0, f"no portals selected to split with, make sure you are using -p"
+    groups, other = Ingress.parse_input(input)
 
     output = []
     plan = []
@@ -349,7 +347,7 @@ def main(opts: list[tuple[str, str]], args):
         portal_order, base_field = group
         tree = Tree(base_field)
         
-        output += Ingress.render(tree.root, color_map, offset, onlyleaves)
+        output.extend(Ingress.render(tree.root, color_map, offset, onlyleaves))
         plan.append(Ingress.plan(tree, portal_order))
         
     Ingress.output_to_json(output + other, "./output.json")
