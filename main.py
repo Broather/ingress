@@ -2,6 +2,7 @@ import json
 import itertools
 import getopt, sys
 import pyperclip
+import os
 
 def my_argmin(lst: list) -> int:
     return list.index(lst, min(lst))
@@ -193,6 +194,15 @@ class Ingress:
         "PV": "./portals/pavilosta.json"}
     
     @staticmethod
+    def output_to_json(object: object, json_file_path:str):
+        if not os.path.exists(json_file_path):
+            os.makedirs(json_file_path)
+        with open(json_file_path, "w", encoding="utf-8") as f:
+            json.dump(object, f, indent=2, ensure_ascii=False)
+        print(f"{os.path.basename(json_file_path)} created successfully")   
+    
+
+    @staticmethod
     def get_label(latLng: dict):
         for portal in Ingress.used_portals:
             if portal.get_latlng() == latLng:
@@ -274,9 +284,15 @@ class Ingress:
         if len(all_root_portals) != len(portal_order):
             print(f"WARNING: route missed {len(all_root_portals) - len(portal_order)} portals in field: {root.portals}")
 
-
+        # NOTE: this might be the hardest thing I've ever done
         portal_labels = [portal.get_label() for portal in portal_order]
-        return dict.fromkeys(portal_labels, {"keys": 0, "links": []})
+        output = {}
+
+        visited = []
+        for label in portal_labels:
+            output[label] = {"keys": 0, "links": visited[:]}
+            visited.append(label)
+        return output
     
     @classmethod
     def add_from_bkmrk(cls, bkmrk: dict) -> None:
@@ -334,20 +350,16 @@ def main(opts: list[tuple[str, str]], args):
     for group in groups:
         portal_order, base_field = group
         tree = Tree(base_field)
-
+        
         output += Ingress.render(tree.root, color_map, offset, onlyleaves)
         plan.append(Ingress.plan(tree, portal_order))
         
-    with open("./output.json", "w") as f:
-        json.dump(output + other, f, indent=2)
-    print("output.json created successfully")   
+    Ingress.output_to_json(output + other, "./output.json")
     
     pyperclip.copy(json.dumps(output + other))
     print("output copied to clipboard successfully")
 
-    with open("./plan.json", "w", encoding="utf-8") as f:
-        json.dump(plan, f, indent=2, ensure_ascii=False)
-    print("plan.json created successfully")   
+    Ingress.output_to_json(plan, "./plan.json")
     
 if __name__ == "__main__":
     opts, args = getopt.getopt(sys.argv[1:], "hp:c:ol", [])
