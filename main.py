@@ -195,8 +195,6 @@ class Ingress:
     
     @staticmethod
     def output_to_json(object: object, json_file_path:str):
-        if not os.path.exists(json_file_path):
-            os.makedirs(json_file_path)
         with open(json_file_path, "w", encoding="utf-8") as f:
             json.dump(object, f, indent=2, ensure_ascii=False)
         print(f"{os.path.basename(json_file_path)} created successfully")   

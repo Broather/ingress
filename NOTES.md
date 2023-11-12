@@ -19,5 +19,5 @@
 - [x] make multi-Trees for multi-polygons NOTE: make user-proof
 - [x] pass render options through getopt
 - [x] puts contents of output.json to clipboard as well
-- [ ] main.py creates input.json, output.json and plan.json if doesn't exists
+- [x] main.py creates input.json, output.json and plan.json if doesn't exists
 - [ ] add tutorial to README.md about adding portals and using the -p option
