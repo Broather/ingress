@@ -6,8 +6,8 @@
 
 ## TODO:
 - [x] object oriented base to build more features on top of (Tree, Field, Portal, Ingress)
-- [ ] planner takes the tree, starting point and route to make the plan
-- [ ] optimise Tree generating to prefer MU NOTE: revisit Field.score
+- [ ] Ingress.plan takes the tree, starting point and route to make the plan
+- [ ] optimise Tree generating to prefer MU (NOTE: revisit Field.score)
 - [ ] plan simulator goes through the steps and gives an approximate time to complete with the keys and mods I currently have in my inventory
 
 - [x] make Ingress.render(tree: Tree, color_map: dict, offset: bool, onlyleaves: bool) -> list[dict] for IITC 
@@ -16,7 +16,7 @@
     - [x] onlyleaves: renders only the top layer of each section (great with ingress color_map)
         - [x] render only tree leaves
 
-- [x] make multi-Trees for multi-polygons NOTE: make user-proof
+- [x] make multi-Trees for multi-polygons (NOTE: make user-proof)
 - [x] pass render options through getopt
 - [x] puts contents of output.json to clipboard as well
 - [x] main.py creates input.json, output.json and plan.json if doesn't exists

@@ -298,7 +298,17 @@ class Ingress:
             portal = Portal(bkmrk[id]["label"], *Ingress.parse_lat_comma_lng(bkmrk[id]["latlng"]))
             cls.used_portals.append(portal)
     
-def help():
+def help(first_time = False):
+    if first_time:
+        print("Looks like it's your first time launching main.py")
+
+        open("./input.json", "w").close()
+        print("input.json created")
+
+        print("""
+        install IITC for your browser at http://iitc.me and go to http://www.intel.ingress.com.
+        more details on which IITC extentions to install hopefully in the README.md file\n\n""")
+        
     print("Syntax: python main.py [-hol] [-p comma_separated_list[<PV|...>]] [-c <rainbow|ingress|gray>]")
     print("""
     Options:
@@ -335,8 +345,15 @@ def main(opts: list[tuple[str, str]], args):
         else:
             assert False, f"ERROR: unsupported option: {o}"
     
-    with open('./input.json', 'r') as f:
-        input: list[dict] = json.load(f)
+    try:
+        with open('./input.json', 'r') as f:
+            input: list[dict] = json.load(f)
+    except FileNotFoundError:
+        help(first_time = True)
+        return
+    except json.decoder.JSONDecodeError:
+        print("input.json empty, make sure to copy/paste whatever IITC gives you into input.json")
+        return
 
     assert len(Ingress.used_portals) > 0, f"no portals selected to split with, make sure you are using -p"
     groups, other = Ingress.parse_input(input)
