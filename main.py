@@ -16,20 +16,22 @@ class Portal:
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Portal):
             return self.lat == other.lat and self.lng == other.lng
-        else:
-            return False
+        return False
 
     def __repr__(self) -> str:
         return f"{self.label}"
 
     def get_latlng(self) -> dict:
         return {"lat": self.lat, "lng": self.lng}
+
     def get_label(self) -> str:
         return self.label
     
     @staticmethod
     def from_latLng(latLng: dict):
         """
+        creates a Portal from geographic coordinates like {lat: 69.6969, lng:420.420}
+
         returns Portal
         """
         return Portal(Ingress.get_label(latLng), *Ingress.parse_latLng(latLng))
@@ -65,6 +67,7 @@ class Field:
         self.children: list[Field] = []
         self.portals: list[Portal] = [p1,p2,p3]
         self.level: int = level
+        self.split_portal = None
     
     def __repr__(self) -> str:
         return str({
@@ -117,10 +120,10 @@ class Field:
         w1, w2, w3 = barycentric_coordinates(portal, a, b, c)
         return (w1 >= 0) and (w2 >= 0) and (w3 >= 0)
 
-    def count_portals(self):
+    def count_portals(self) -> int:
         return sum(list(map(self.is_in, Ingress.used_portals)))
     
-    def get_inside_portals(self):
+    def get_inside_portals(self) -> list[Portal]:
         return [portal for portal in Ingress.used_portals if self.is_in(portal)]
 
     def score(self, center_portal: Portal) -> int:
@@ -132,16 +135,19 @@ class Field:
         return max(portal_counts) - min(portal_counts)
 
     def split(self):
+        """
+        returns list[Field]
+        """
         potencial_center_portals = list(filter(self.is_in, Ingress.used_portals))
 
         scores = []
         for portal in potencial_center_portals:
             scores.append(self.score(portal))
 
-        center_portal = potencial_center_portals[my_argmin(scores)]
-        return [Field(*outer_portals, center_portal, self.level + 1) for outer_portals in itertools.combinations(self.portals, 2)]
+        self.split_portal = potencial_center_portals[my_argmin(scores)]
+        return [Field(*outer_portals, self.split_portal, self.level + 1) for outer_portals in itertools.combinations(self.portals, 2)]
 
-    def grow(self):
+    def grow(self) -> None:
         if self.count_portals() > 0:
             self.children = self.split()
             for child in self.children:
@@ -166,9 +172,32 @@ class Tree:
             input["color"] = to
         
         return input
+    
+    # TODO: maybe move Ingress.render to here
+    def get_links(self, field: Field = None, snowball: list[tuple] = []) -> list[tuple]:
+        if field == None:
+            field = self.root
+            snowball.extend(itertools.combinations(field.portals, 2))
+        
+        # if fiels is NOT a leaf, aka, has children
+        if len(field.children) > 0:
+            assert field.split_portal != None, f"ERROR: field: {field} has childern but not assigned split_portal"
+            snowball.extend([(portal, field.split_portal) for portal in field.portals])
+            
+            for child in field.children:
+                snowball = self.get_links(child, snowball)
+        
+        # (root_outer_links + (root.portals and root.split_portal) + (child.portals and child.split_portal))
+        return snowball
+
 
 class Ingress:
+    portal_group_map = {
+        "PV": "./portals/pavilosta.json",
+        "VP": "./portals/ventspils.json"}
+        
     used_portals: list[Portal] = []
+
     color_maps = {
         "rainbow" :
             {"0": "#ff0000",
@@ -190,15 +219,12 @@ class Ingress:
             "default": "#bbbbbb"},
         "gray": 
             {"default": "#bbbbbb"}}
-    portal_group_map = {
-        "PV": "./portals/pavilosta.json"}
     
     @staticmethod
     def output_to_json(object: object, json_file_path:str):
         with open(json_file_path, "w", encoding="utf-8") as f:
             json.dump(object, f, indent=2, ensure_ascii=False)
         print(f"{os.path.basename(json_file_path)} created successfully")   
-    
 
     @staticmethod
     def get_label(latLng: dict):
@@ -225,16 +251,12 @@ class Ingress:
         input (list[dict])
 
         Returns:
-        tuple: (portal_order, base_field, other)
+        tuple: (groups, other)
         where:
-            portal_order: list[Portal]
-            base_fields: list[Field]
+            groups: (portal_order: list[Portal], base_fields: list[Field])
             other: any drawn elements that are not white
         """
         white = "#ffffff"
-        # Markers share a portal with a polygon and polyline
-        # Polylines share it's beginning and end portals with a polygon and every other portala is in the polygon
-        # Polygons don't overlap
                 
         markers = [e for e in IITC_elements if e["type"] == "marker" and e["color"] == white]
         polylines = [e for e in IITC_elements if e["type"] == "polyline" and e["color"] == white]
@@ -272,7 +294,7 @@ class Ingress:
         return output
 
     @staticmethod
-    def plan(tree: Tree, portal_order: list[Portal]):
+    def plan(tree: Tree, portal_order: list[Portal]) -> dict:
         root = tree.root
         all_root_portals = root.get_inside_portals() + root.portals
         # assure that portal_order contains root.portals
@@ -281,17 +303,24 @@ class Ingress:
         # assure that every portal in root is also present in portal_order
         if len(all_root_portals) != len(portal_order):
             print(f"WARNING: route missed {len(all_root_portals) - len(portal_order)} portals in field: {root.portals}")
+        
+        links = tree.get_links() # [(portal1, portal2), (p1, p3), ...]
+        print(f"amount of links: {len(links)}")
+        visited_portals = []
+        for portal in portal_order:
+            available_links = [link for link in links if portal in link]
+            
+            visited_portals.append(portal)
 
-        # NOTE: this might be the hardest thing I've ever done
+            
         portal_labels = [portal.get_label() for portal in portal_order]
-        output = {}
 
-        visited = []
+        output = {}
         for label in portal_labels:
-            output[label] = {"keys": 0, "links": visited[:]}
-            visited.append(label)
+            output[label] = {"keys": 0, "links": []}
+
         return output
-    
+
     @classmethod
     def add_from_bkmrk(cls, bkmrk: dict) -> None:
         for id in bkmrk:
@@ -316,12 +345,12 @@ def help(first_time = False):
         o: adds an offset to layers so it's easier to tell them apart
         l: display only the leaf fields, aka the top most layer of each section
         p: defines which portal groups to use in making fields (only way I could think of to get portal data here)
-        c: selects the color map to use, default is gray for all layers
+        c: selects the color map to use, default is rainbow for all layers
     """)
 
 def main(opts: list[tuple[str, str]], args):
     # defaults part
-    color_map = Ingress.color_maps["gray"]
+    color_map = Ingress.color_maps["rainbow"]
     offset = False
     onlyleaves = False
     

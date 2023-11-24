@@ -1,7 +1,7 @@
 -> Ingress.parse_input(input.json) -> (start, route, base, other) DONE
 -> tree = Tree(base) DONE (optimise to maximise the MU)
 -> Ingress.render(tree: Tree, color_map: dict, offset: bool, onlyleaves: bool) DONE
--> plan = Plan(tree, start, route)
+-> Ingress.plan(tree, start, route)
 -> simulate_plan(plan)
 
 ## TODO:
