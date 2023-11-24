@@ -76,6 +76,9 @@ class Field:
             "level": self.level,
             })
 
+    def get_level(self) -> int:
+        return self.level
+
     def is_in(self, portal: Portal) -> bool:
         """
         Check if a Portal is inside the Field on Earth's surface. (made by GPT3)
@@ -190,6 +193,23 @@ class Tree:
         # (root_outer_links + (root.portals and root.split_portal) + (child.portals and child.split_portal))
         return snowball
 
+    def get_fields_portal_is_a_part_of(self, portal: Portal, field: Field = None, snowball: list[Field] = []) -> list[Field]:
+        if field == None:
+            field = self.root
+
+        if portal in field.portals:
+            snowball.append(field)
+        
+        for child in field.children:
+            snowball = self.get_fields_portal_is_a_part_of(portal, child, snowball)
+
+        return snowball
+    # TODO: lmao
+    def get_lowest_level_fields_level_portal_is_a_part_of(self, portal: Portal) -> int:
+        fields = self.get_fields_portal_is_a_part_of(portal)
+        fields.sort(key = Field.get_level)
+        return fields[0].get_level()
+
 
 class Ingress:
     portal_group_map = {
@@ -279,7 +299,7 @@ class Ingress:
     def render(field: Field, color_map: dict, offset: bool, onlyleaves: bool, output: list = []) -> list[dict]:
         if offset and onlyleaves and field.level == 0: print("WARNING: having offset and onlyleaves enabled at the same time makes 0 sense")
 
-        is_leaf = len(field.children) == 0
+        is_leaf = (len(field.children) == 0)
         if not onlyleaves or (onlyleaves and is_leaf):
             data = {
                 "type": "polygon",
@@ -306,19 +326,20 @@ class Ingress:
         
         links = tree.get_links() # [(portal1, portal2), (p1, p3), ...]
         print(f"amount of links: {len(links)}")
+        
+        output = {}
         visited_portals = []
         for portal in portal_order:
+            other_portals = []
+            # TODO: not technically "available"
             available_links = [link for link in links if portal in link]
-            
+            for link in available_links:
+                other_portals.extend(p for p in link if p != portal and p in visited_portals)
+                other_portals.sort(key = tree.get_lowest_level_fields_level_portal_is_a_part_of)
+
+            output[portal.get_label()] = {"keys": len(available_links)-len(other_portals), "links": list(map(Portal.get_label, other_portals))}
             visited_portals.append(portal)
-
-            
-        portal_labels = [portal.get_label() for portal in portal_order]
-
-        output = {}
-        for label in portal_labels:
-            output[label] = {"keys": 0, "links": []}
-
+        
         return output
 
     @classmethod
