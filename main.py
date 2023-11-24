@@ -64,17 +64,13 @@ class Portal:
         
 class Field:
     def __init__(self, p1: Portal, p2: Portal, p3: Portal, level: int) -> None:
-        self.children: list[Field] = []
         self.portals: list[Portal] = [p1,p2,p3]
         self.level: int = level
         self.split_portal = None
+        self.children: list[Field] = []
     
     def __repr__(self) -> str:
-        return str({
-            "children": self.children,
-            "portals": self.portals,
-            "level": self.level,
-            })
+        return str(self.portals)
 
     def get_level(self) -> int:
         return self.level
@@ -177,7 +173,10 @@ class Tree:
         return input
     
     # TODO: maybe move Ingress.render to here
-    def get_links(self, field: Field = None, snowball: list[tuple] = []) -> list[tuple]:
+    def get_links(self, field: Field = None, snowball: list[tuple] = None) -> list[tuple]:
+        if snowball == None:
+            snowball = []
+
         if field == None:
             field = self.root
             snowball.extend(itertools.combinations(field.portals, 2))
@@ -193,7 +192,10 @@ class Tree:
         # (root_outer_links + (root.portals and root.split_portal) + (child.portals and child.split_portal))
         return snowball
 
-    def get_fields_portal_is_a_part_of(self, portal: Portal, field: Field = None, snowball: list[Field] = []) -> list[Field]:
+    def get_fields_portal_is_a_part_of(self, portal: Portal, field: Field = None, snowball: list[Field] = None) -> list[Field]:
+        if snowball == None:
+            snowball = []
+
         if field == None:
             field = self.root
 
@@ -204,11 +206,11 @@ class Tree:
             snowball = self.get_fields_portal_is_a_part_of(portal, child, snowball)
 
         return snowball
-    # TODO: lmao
+        
     def get_lowest_level_fields_level_portal_is_a_part_of(self, portal: Portal) -> int:
         fields = self.get_fields_portal_is_a_part_of(portal)
-        fields.sort(key = Field.get_level)
-        return fields[0].get_level()
+        level = min(list(map(Field.get_level, fields))) 
+        return level
 
 
 class Ingress:
@@ -296,7 +298,9 @@ class Ingress:
         return (groups, other)
 
     @staticmethod
-    def render(field: Field, color_map: dict, offset: bool, onlyleaves: bool, output: list = []) -> list[dict]:
+    def render(field: Field, color_map: dict, offset: bool, onlyleaves: bool, output: list = None) -> list[dict]:
+        if output == None:
+            output = []
         if offset and onlyleaves and field.level == 0: print("WARNING: having offset and onlyleaves enabled at the same time makes 0 sense")
 
         is_leaf = (len(field.children) == 0)
@@ -324,20 +328,21 @@ class Ingress:
         if len(all_root_portals) != len(portal_order):
             print(f"WARNING: route missed {len(all_root_portals) - len(portal_order)} portals in field: {root.portals}")
         
-        links = tree.get_links() # [(portal1, portal2), (p1, p3), ...]
-        print(f"amount of links: {len(links)}")
+        links = tree.get_links()
         
         output = {}
         visited_portals = []
         for portal in portal_order:
-            other_portals = []
+            other_portals: list[Portal] = []
             # TODO: not technically "available"
             available_links = [link for link in links if portal in link]
             for link in available_links:
                 other_portals.extend(p for p in link if p != portal and p in visited_portals)
                 other_portals.sort(key = tree.get_lowest_level_fields_level_portal_is_a_part_of)
 
-            output[portal.get_label()] = {"keys": len(available_links)-len(other_portals), "links": list(map(Portal.get_label, other_portals))}
+            output[portal.get_label()] = {
+                "keys": len(available_links)-len(other_portals), 
+                "links": [f"{p.get_label()} lvl {tree.get_lowest_level_fields_level_portal_is_a_part_of(p)}" for p in other_portals]}
             visited_portals.append(portal)
         
         return output
