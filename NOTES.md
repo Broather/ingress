@@ -8,10 +8,11 @@
 - [x] object oriented base to build more features on top of (Tree, Field, Portal, Ingress)
 - [x] Ingress.plan takes the tree, starting point and route to make the plan
 - [ ] optimise Tree generating to prefer MU (NOTE: revisit Field.score)
-- [ ] plan simulator goes through the steps 
+    - [ ] if multiple split_portals have the same score make em' both and compare the MU
+- [ ] plan simulator goes through the steps
     - [ ] returns approximate time to complete with the keys and mods I currently have in my inventory
     - [ ] lists the most time-consuming portals to collect keys from
-- [ ] in Ingress.plan, have a secondary sorting parameter be distance between portals so it goes from farthest to nearest if there are multiple of the same level
+- [ ] have Ingress.plan sort other portals with primary parameter lowers_feld_level and secondary Portal.distance (desc)
 - [x] make Ingress.render(tree: Tree, color_map: dict, offset: bool, onlyleaves: bool) -> list[dict] for IITC 
     - [x] color_map: maps Field.level to a color (ingress, rainbow, white)
     - [x] offset: adds an offset * Field.level to lattitude to separate layers 

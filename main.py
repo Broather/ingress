@@ -3,6 +3,7 @@ import itertools
 import getopt, sys
 import pyperclip
 import os
+from math import radians, sin, cos, sqrt, atan2
 
 def my_argmin(lst: list) -> int:
     return list.index(lst, min(lst))
@@ -27,6 +28,30 @@ class Portal:
     def get_label(self) -> str:
         return self.label
     
+    def distance(self, other) -> float:
+        """
+        haversine distance between 2 Portals
+        arguments: 
+            self Portal: one portal
+            other Portal: the other portal
+
+        returns the distance in meters between 2 Portals
+        """
+        # Convert latitude and longitude from degrees to radians
+        lat1, lng1, lat2, lng2 = map(radians, [self.lat, self.lng, other.lat, other.lng])
+
+        # Haversine formula
+        dlat = lat2 - lat1
+        dlng = lng2 - lng1
+        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlng / 2) ** 2
+        c = 2 * atan2(sqrt(a), sqrt(1 - a))
+
+        RADIUS_OF_EARTH = 6371000  # Earth radius in meters
+        # Calculate the distance
+        distance = RADIUS_OF_EARTH * c
+
+        return distance
+
     @staticmethod
     def from_latLng(latLng: dict):
         """
@@ -79,12 +104,11 @@ class Field:
         """
         Check if a Portal is inside the Field on Earth's surface. (made by GPT3)
 
-        Args:
+        arguments:
         self Field: contains data about portals it contains
         portal Portal: Latitude and longitude of the point (in degrees).
 
-        Returns:
-        bool: True if the point is inside the triangle, False otherwise.
+        returns bool: True if the point is inside the triangle, otherwise False.
         """
 
         def sign(p1: Portal, p2: Portal, p3: Portal):
@@ -319,6 +343,9 @@ class Ingress:
 
     @staticmethod
     def plan(tree: Tree, portal_order: list[Portal]) -> dict:
+        AVERAGE_WALKING_SPEED = 84 # meters/minute
+        COOLDOWN_BETWEEN_HACKS = 5 # minutes
+
         root = tree.root
         all_root_portals = root.get_inside_portals() + root.portals
         # assure that portal_order contains root.portals
@@ -329,22 +356,35 @@ class Ingress:
             print(f"WARNING: route missed {len(all_root_portals) - len(portal_order)} portals in field: {root.portals}")
         
         links = tree.get_links()
-        
-        output = {}
+        steps = {}
         visited_portals = []
+        
         for portal in portal_order:
             other_portals: list[Portal] = []
             # TODO: not technically "available"
             available_links = [link for link in links if portal in link]
             for link in available_links:
                 other_portals.extend(p for p in link if p != portal and p in visited_portals)
-                other_portals.sort(key = tree.get_lowest_level_fields_level_portal_is_a_part_of)
+                # sort by lowest field lvl (asc), but if levels are the same sort them by portal distance (desc)
+                other_portals.sort(key = lambda p: (tree.get_lowest_level_fields_level_portal_is_a_part_of(p), -portal.distance(p)))
 
-            output[portal.get_label()] = {
+            steps[portal.get_label()] = {
                 "keys": len(available_links)-len(other_portals), 
-                "links": [f"{p.get_label()} lvl {tree.get_lowest_level_fields_level_portal_is_a_part_of(p)}" for p in other_portals]}
+                "links": [f"{p.get_label()} lvl {tree.get_lowest_level_fields_level_portal_is_a_part_of(p)}, d {round(portal.distance(p), 2)}" for p in other_portals]
+                }
             visited_portals.append(portal)
         
+        route_length = round(sum(itertools.starmap(Portal.distance, itertools.pairwise(portal_order))), 2)
+        total_keys_required = len(tree.get_links())
+
+        output = {
+            "Title": str(tree.root.portals),
+            "Route_length_(meters)": route_length,
+            "Total_keys_required": total_keys_required,
+            "Estimated_time_to_complete_(minutes)": round(route_length / AVERAGE_WALKING_SPEED + total_keys_required * COOLDOWN_BETWEEN_HACKS, 2),
+            "Steps": steps
+            }
+
         return output
 
     @classmethod
