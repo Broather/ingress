@@ -3,7 +3,7 @@ import itertools
 import getopt, sys
 import pyperclip
 import os
-from math import radians, sin, cos, sqrt, atan2
+import math
 
 def my_argmin(lst: list) -> int:
     return list.index(lst, min(lst))
@@ -38,13 +38,13 @@ class Portal:
         returns the distance in meters between 2 Portals
         """
         # Convert latitude and longitude from degrees to radians
-        lat1, lng1, lat2, lng2 = map(radians, [self.lat, self.lng, other.lat, other.lng])
+        lat1, lng1, lat2, lng2 = map(math.radians, [self.lat, self.lng, other.lat, other.lng])
 
         # Haversine formula
         dlat = lat2 - lat1
         dlng = lng2 - lng1
-        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlng / 2) ** 2
-        c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlng / 2) ** 2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
         RADIUS_OF_EARTH = 6371000  # Earth radius in meters
         # Calculate the distance
@@ -88,11 +88,12 @@ class Portal:
         return [Portal(Ingress.get_label(latLng), *Ingress.parse_latLng(latLng)) for latLng in latLngs]
         
 class Field:
-    def __init__(self, p1: Portal, p2: Portal, p3: Portal, level: int) -> None:
+    def __init__(self, p1: Portal, p2: Portal, p3: Portal, level: int, is_herringbone = False) -> None:
         self.portals: list[Portal] = [p1,p2,p3]
         self.level: int = level
         self.split_portal = None
         self.children: list[Field] = []
+        self.is_herringbone = is_herringbone
     
     def __repr__(self) -> str:
         return str(self.portals)
@@ -195,8 +196,7 @@ class Tree:
             input["color"] = to
         
         return input
-    
-    # TODO: maybe move Ingress.render to here
+
     def get_links(self, field: Field = None, snowball: list[tuple] = None) -> list[tuple]:
         if snowball == None:
             snowball = []
@@ -235,7 +235,6 @@ class Tree:
         fields = self.get_fields_portal_is_a_part_of(portal)
         level = min(list(map(Field.get_level, fields))) 
         return level
-
 
 class Ingress:
     portal_group_map = {
@@ -314,7 +313,13 @@ class Ingress:
         groups = []
         for marker, polyline, polygon in zip(markers, polylines, polygons):
             portal_order = Portal.from_IITC_marker_polyline(marker, polyline)
-            base_field = Field(*Portal.from_IITC_polygon(polygon), 0)
+            if len(polygon['latLngs']) == 3:
+                base_field = Field(*Portal.from_IITC_polygon(polygon), 0)
+            else:
+                assert len(polygon['latLngs']) == 4, f"ERROR: unable to parse polygon with {len(polygon['latLngs'])} points"
+                herringbone_portals = Portal.from_IITC_polygon(polygon)
+                herringbone_base_portals = [portal for portal in herringbone_portals if portal not in portal_order]
+                base_field = Field(herringbone_portals[0], *herringbone_base_portals, 0, is_herringbone = True)
             groups.append((portal_order, base_field))
 
         other = [e for e in IITC_elements if e["color"] != white]
@@ -358,6 +363,7 @@ class Ingress:
         links = tree.get_links()
         steps = {}
         visited_portals = []
+        SBUL_count = 0
         
         for portal in portal_order:
             other_portals: list[Portal] = []
@@ -368,9 +374,11 @@ class Ingress:
                 # sort by lowest field lvl (asc), but if levels are the same sort them by portal distance (desc)
                 other_portals.sort(key = lambda p: (tree.get_lowest_level_fields_level_portal_is_a_part_of(p), -portal.distance(p)))
 
+            if len(other_portals) > 8: SBUL_count += 1
+
             steps[portal.get_label()] = {
-                "keys": len(available_links)-len(other_portals), 
-                "links": [f"{p.get_label()} lvl {tree.get_lowest_level_fields_level_portal_is_a_part_of(p)}, d {round(portal.distance(p), 2)}" for p in other_portals]
+                "keys": len(available_links)-len(other_portals),
+                "links": [p.get_label() for p in other_portals]
                 }
             visited_portals.append(portal)
         
@@ -379,6 +387,7 @@ class Ingress:
 
         output = {
             "Title": str(tree.root.portals),
+            "Mods_required": {"SBUL": SBUL_count},
             "Route_length_(meters)": route_length,
             "Total_keys_required": total_keys_required,
             "Estimated_time_to_complete_(minutes)": round(route_length / AVERAGE_WALKING_SPEED + total_keys_required * COOLDOWN_BETWEEN_HACKS, 2),
@@ -419,6 +428,7 @@ def main(opts: list[tuple[str, str]], args):
     color_map = Ingress.color_maps["rainbow"]
     offset = False
     onlyleaves = False
+    no_plan = False
     
     # option parsing part
     for o, a in opts:
@@ -437,6 +447,8 @@ def main(opts: list[tuple[str, str]], args):
             offset = True
         elif o == "-l":
             onlyleaves = True
+        elif o == "--noplan":
+            no_plan = True
         else:
             assert False, f"ERROR: unsupported option: {o}"
     
@@ -467,8 +479,8 @@ def main(opts: list[tuple[str, str]], args):
     pyperclip.copy(json.dumps(output + other))
     print("output copied to clipboard successfully")
 
-    Ingress.output_to_json(plan, "./plan.json")
+    if not no_plan: Ingress.output_to_json(plan, "./plan.json")
     
 if __name__ == "__main__":
-    opts, args = getopt.getopt(sys.argv[1:], "hp:c:ol", [])
+    opts, args = getopt.getopt(sys.argv[1:], "hp:c:ol", ["noplan"])
     main(opts, args)
