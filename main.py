@@ -103,7 +103,7 @@ class Field:
 
     def is_in(self, portal: Portal) -> bool:
         """
-        Check if a Portal is inside the Field on Earth's surface. (made by GPT3)
+        Check if a Portal is inside the Field on Earth's surface. (made by GPT-3.5)
 
         arguments:
         self Field: contains data about portals it contains
@@ -191,15 +191,8 @@ class Tree:
         for child in field.children:
             self.display(child)
     
-    def change_color(self, input: list[dict], _from: str, to: str) -> list[dict]:
-        if input["color"] == _from:
-            input["color"] = to
-        
-        return input
-
     def get_links(self, field: Field = None, snowball: list[tuple] = None) -> list[tuple]:
-        if snowball == None:
-            snowball = []
+        if snowball == None: snowball = []
 
         if field == None:
             field = self.root
@@ -217,11 +210,8 @@ class Tree:
         return snowball
 
     def get_fields_portal_is_a_part_of(self, portal: Portal, field: Field = None, snowball: list[Field] = None) -> list[Field]:
-        if snowball == None:
-            snowball = []
-
-        if field == None:
-            field = self.root
+        if snowball == None: snowball = []
+        if field == None: field = self.root
 
         if portal in field.portals:
             snowball.append(field)
@@ -328,8 +318,7 @@ class Ingress:
 
     @staticmethod
     def render(field: Field, color_map: dict, offset: bool, onlyleaves: bool, output: list = None) -> list[dict]:
-        if output == None:
-            output = []
+        if output == None: output = []
         if offset and onlyleaves and field.level == 0: print("WARNING: having offset and onlyleaves enabled at the same time makes 0 sense")
 
         is_leaf = (len(field.children) == 0)
@@ -385,7 +374,7 @@ class Ingress:
         route_length = round(sum(itertools.starmap(Portal.distance, itertools.pairwise(portal_order))), 2)
         total_keys_required = len(tree.get_links())
 
-        output = {
+        return {
             "Title": str(tree.root.portals),
             "Mods_required": {"SBUL": SBUL_count},
             "Route_length_(meters)": route_length,
@@ -393,8 +382,6 @@ class Ingress:
             "Estimated_time_to_complete_(minutes)": round(route_length / AVERAGE_WALKING_SPEED + total_keys_required * COOLDOWN_BETWEEN_HACKS, 2),
             "Steps": steps
             }
-
-        return output
 
     @classmethod
     def add_from_bkmrk(cls, bkmrk: dict) -> None:
