@@ -3,6 +3,7 @@ portals
 input.json
 output.json
 plan.json
+rekey.json
 __pycache__
 venv
 .vscode
