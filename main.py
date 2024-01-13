@@ -30,8 +30,9 @@ class Portal:
     
     def distance(self, other) -> float:
         """
-        haversine distance between 2 Portals
-        arguments: 
+        Haversine distance between 2 Portals
+
+        arguments:
             self Portal: one portal
             other Portal: the other portal
 
@@ -46,8 +47,7 @@ class Portal:
         a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlng / 2) ** 2
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-        RADIUS_OF_EARTH = 6371000  # Earth radius in meters
-        # Calculate the distance
+        RADIUS_OF_EARTH = 6371000 # meters
         distance = RADIUS_OF_EARTH * c
 
         return distance
@@ -55,7 +55,10 @@ class Portal:
     @staticmethod
     def from_latLng(latLng: dict):
         """
-        creates a Portal from geographic coordinates like {lat: 69.6969, lng:420.420}
+        creates a Portal from geographic coordinates dictionary
+        
+        arguments:
+            latLng dict: like {lat: 69.6969, lng: 420.420}
 
         returns Portal
         """
@@ -106,8 +109,8 @@ class Field:
         Check if a Portal is inside the Field on Earth's surface. (made by GPT-3.5)
 
         arguments:
-        self Field: contains data about portals it contains
-        portal Portal: Latitude and longitude of the point (in degrees).
+            self Field: contains data about portals it contains
+            portal Portal: Latitude and longitude of the point (in degrees).
 
         returns bool: True if the point is inside the triangle, otherwise False.
         """
@@ -199,7 +202,7 @@ class Tree:
             snowball.extend(itertools.combinations(field.portals, 2))
         
         # if fiels is NOT a leaf, aka, has children
-        if len(field.children) > 0:
+        if field.children:
             assert field.split_portal != None, f"ERROR: field: {field} has childern but not assigned split_portal"
             snowball.extend([(portal, field.split_portal) for portal in field.portals])
             
@@ -427,9 +430,8 @@ def main(opts: list[tuple[str, str]], args):
                 with open(Ingress.portal_group_map[portal_group.strip()], "r", encoding='utf-8') as f:
                     Ingress.add_from_bkmrk(json.load(f)['portals']['idOthers']['bkmrk'])
         elif o == "-c":
-            if a in Ingress.color_maps.keys():
-                color_map = Ingress.color_maps[a]
-            else: print(f"WARNING: color map {a} not recognised")
+            assert a in Ingress.color_maps.keys(), f"ERROR: color map {a} not recognised"
+            color_map = Ingress.color_maps[a]
         elif o == "-o":
             offset = True
         elif o == "-l":
@@ -449,7 +451,7 @@ def main(opts: list[tuple[str, str]], args):
         print("input.json empty, make sure to copy/paste whatever IITC gives you into input.json")
         return
 
-    assert len(Ingress.used_portals) > 0, f"no portals selected to split with, make sure you are using -p"
+    assert Ingress.used_portals, f"no portals selected to split with, make sure you are using -p"
     groups, other = Ingress.parse_input(input)
 
     output = []

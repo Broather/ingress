@@ -11,6 +11,8 @@
 - [ ] optimise Tree generating to prefer MU (NOTE: revisit Field.score)
     - [ ] if multiple split_portals have the same score make em' both and compare the total area (not that simple)
 - [ ] Ingress.snapshot(steps, portal_name) returns an IITC output of a snapshot of the links and fields created at Steps[portal_name]
+- [ ] use argparse instead of getopt
+- [ ] copy over rekey.py code to a rekey subcommand in main.py
 - [x] have Ingress.plan sort other_portals with primary parameter lowers_feld_level and secondary Portal.distance (desc)
 - [x] make Ingress.render(tree: Tree, color_map: dict, offset: bool, onlyleaves: bool) -> list[dict] for IITC 
     - [x] color_map: maps Field.level to a color (ingress, rainbow, white)
