@@ -5,11 +5,13 @@ import itertools
 from main import Ingress, Portal
 
 class Link:
+    instance_count = 0
     def __init__(self, frm, to, color) -> None:
         self.a: Portal = Ingress.find_portal(frm)
         self.b: Portal = Ingress.find_portal(to)
         self.portals = {self.a, self.b}
         self.color = color
+        Link.instance_count += 1
     
     def __repr__(self) -> str:
         return f"{self.portals}"
@@ -31,11 +33,51 @@ class Link:
             return False
             
 class Field:
+    instance_count = 0
     def __init__(self, l1: Link, l2: Link, l3: Link, color) -> None:
         self.portals = l1.portals | l2.portals | l3.portals
         self.color = color
+        Field.instance_count += 1
+
     def __repr__(self) -> str:
         return f"{self.portals}"
+
+def my_append(link: Link, output: list, only_links: bool) -> list:
+    """
+    checks to see if field or fields can be made from link and the current state of things (output) 
+    """
+    # check how many links in output are touching link
+    is_touching_map = list(map(link.is_touching, output))
+    amount_of_links_touching = sum(is_touching_map)
+    # print(f"There are {amount_of_links_touching} links touching {link}")
+    output.append(link)
+    if not only_links:
+        # check if any combination of link and 2 links that are touching create a closed loop
+        touching_links = [l for l, is_touching in zip(output, is_touching_map) if is_touching]
+        for one, other_one in itertools.combinations(touching_links, 2):
+            if link.is_loop(one, other_one):
+                field = Field(link, one, other_one, link.color)
+                # print(f"The links {link} {one} {other_one} create a field: {field}, appending...")
+                output.append(field)
+
+    return output
+    
+def render(object: Link|Field) -> dict:
+    if isinstance(object, Link):
+        data = {
+            "type": "polyline",
+            "latLngs": [{"lat": portal.lat, "lng": portal.lng} for portal in object.portals],
+            "color": object.color
+        }
+    elif isinstance(object, Field):
+        data = {
+            "type": "polygon",
+            "latLngs": [{"lat": portal.lat, "lng": portal.lng} for portal in object.portals],
+            "color": object.color
+        }
+    else:
+        raise Exception(f"ERROR attempted to render unrecognised object of type: {type(object)}")
+    return data
 
 def help():
     print("Syntax: python snapshot.py [-hl] [-p comma_separated_list[<PV|VP|..>]] path/to/plan.json step_number")
@@ -77,7 +119,7 @@ def main(opts: list[tuple[str, str]], args):
         return
 
     relevant_steps = list(itertools.islice(steps, step_to_stop_at))
-    print(f"going through these steps: {relevant_steps}")
+    print(f"Total steps: {len(steps)}, going through {step_to_stop_at} of them")
 
     blue = "#0022ff"
     green = "#00ff08"
@@ -95,44 +137,14 @@ def main(opts: list[tuple[str, str]], args):
     
     output = list(map(render, output))
     Ingress.output_to_json(output, "./snapshot.json")
+    Ingress.copy_to_clipboard(output)
 
-def my_append(link: Link, output: list, only_links: bool) -> list:
-    """
-    checks to see if field or fields can be made from link and the current state of things (output) 
-    """
-    # check how many links in output are touching link
-    is_touching_map = list(map(link.is_touching, output))
-    amount_of_links_touching = sum(is_touching_map)
-    print(f"There are {amount_of_links_touching} links touching {link}")
-    output.append(link)
-    if not only_links:
-        # check if any combination of link and 2 links that are touching create a closed loop
-        touching_links = [l for l, is_touching in zip(output, is_touching_map) if is_touching]
-        for one, other_one in itertools.combinations(touching_links, 2):
-            if link.is_loop(one, other_one):
-                field = Field(link, one, other_one, link.color)
-                print(f"The links {link} {one} {other_one} create a field: {field}, appending...")
-                output.append(field)
+    AP_FOR_CREATING_A_LINK = 313
+    AP_FOR_CREATING_A_FIELD = 1250
 
-    return output
-    
-    return output
-def render(object: Link|Field) -> dict:
-    if isinstance(object, Link):
-        data = {
-            "type": "polyline",
-            "latLngs": [{"lat": portal.lat, "lng": portal.lng} for portal in object.portals],
-            "color": object.color
-        }
-    elif isinstance(object, Field):
-        data = {
-            "type": "polygon",
-            "latLngs": [{"lat": portal.lat, "lng": portal.lng} for portal in object.portals],
-            "color": object.color
-        }
-    else:
-        raise Exception(f"ERROR attempted to render unrecognised object of type: {type(object)}")
-    return data
+    print(f"Links made: {Link.instance_count}")
+    print(f"Fields made: {Field.instance_count}")
+    print(f"AP from links and fields: {AP_FOR_CREATING_A_LINK*Link.instance_count + AP_FOR_CREATING_A_FIELD*Field.instance_count}")
 
 if __name__ == "__main__":
     opts, args = getopt.getopt(sys.argv[1:], "hlp:", [])
