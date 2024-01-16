@@ -14,6 +14,9 @@ class Portal:
         self.lat = lat
         self.lng = lng
 
+    def __hash__(self) -> int:
+        return hash(self.label)
+
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Portal):
             return self.lat == other.lat and self.lng == other.lng
@@ -58,7 +61,7 @@ class Portal:
         creates a Portal from geographic coordinates dictionary
         
         arguments:
-            latLng dict: like {lat: 69.6969, lng: 420.420}
+            latLng dict: like {lat: 69.69, lng: 420.420}
 
         returns Portal
         """
@@ -127,9 +130,9 @@ class Field:
 
         a, b, c = self.portals
 
-        assert a.lat != b.lat and a.lng != b.lng, "ERROR: Field has 2 Portls in the same location: (a and b)"
-        assert a.lat != c.lat and a.lng != c.lng, "ERROR: Field has 2 Portls in the same location: (a and c)"
-        assert b.lat != c.lat and b.lng != c.lng, "ERROR: Field has 2 Portls in the same location: (b and c)"
+        assert a.lat != b.lat and a.lng != b.lng, "ERROR: Field has 2 Portals in the same location: (a and b)"
+        assert a.lat != c.lat and a.lng != c.lng, "ERROR: Field has 2 Portals in the same location: (a and c)"
+        assert b.lat != c.lat and b.lng != c.lng, "ERROR: Field has 2 Portals in the same location: (b and c)"
 
         d1 = sign(portal, a, b)
         d2 = sign(portal, b, c)
@@ -230,6 +233,7 @@ class Tree:
         return level
 
 class Ingress:
+    OFFSET_AMOUNT = 0.0001
     portal_group_map = {
         "PV": "./portals/pavilosta.json",
         "VP": "./portals/ventspils.json"}
@@ -237,16 +241,16 @@ class Ingress:
     used_portals: list[Portal] = []
 
     color_maps = {
-        "rainbow" :
-            {"0": "#ff0000",
+        "rainbow" : {
+            "0": "#ff0000",
             "1": "#ffff00",
             "2": "#00ff00",
             "3": "#00ffff",
             "4": "#0000ff",
             "5": "#ff00ff",
             "default": "#bbbbbb"},
-        "ingress": 
-            {"0": "#f0ff20",
+        "ingress": {
+            "0": "#f0ff20",
             "1": "#ffb01c",
             "2": "#ef8733",
             "3": "#ff642c",
@@ -255,14 +259,31 @@ class Ingress:
             "6": "#b300ff",
             "7": "#5100ff",
             "default": "#bbbbbb"},
-        "gray": 
-            {"default": "#bbbbbb"}}
+        "gray": { 
+            "default": "#bbbbbb"}}
     
+    @staticmethod
+    def find_portal(label: str):
+        """
+        finds a Portal from used_portals with label
+
+        return Portal|None
+        """
+        for p in Ingress.used_portals:
+            if p.get_label() == label:
+                return p
+        return None
+
     @staticmethod
     def output_to_json(object: object, json_file_path:str):
         with open(json_file_path, "w", encoding="utf-8") as f:
             json.dump(object, f, indent=2, ensure_ascii=False)
         print(f"{os.path.basename(json_file_path)} created successfully")   
+
+    @staticmethod
+    def copy_to_clipboard(object):
+        pyperclip.copy(json.dumps(object))
+        print("output copied to clipboard successfully")
 
     @staticmethod
     def get_label(latLng: dict):
@@ -328,7 +349,7 @@ class Ingress:
         if not onlyleaves or (onlyleaves and is_leaf):
             data = {
                 "type": "polygon",
-                "latLngs": [{"lat": portal.lat + 0.0001*offset*field.level, "lng": portal.lng} for portal in field.portals],
+                "latLngs": [{"lat": portal.lat + Ingress.OFFSET_AMOUNT*offset*field.level, "lng": portal.lng} for portal in field.portals],
                 "color": color_map.get(str(field.level), color_map["default"])
             }
             output.append(data)
@@ -464,9 +485,7 @@ def main(opts: list[tuple[str, str]], args):
         plan.append(Ingress.plan(tree, portal_order))
         
     Ingress.output_to_json(output + other, "./output.json")
-    
-    pyperclip.copy(json.dumps(output + other))
-    print("output copied to clipboard successfully")
+    Ingress.copy_to_clipboard(output + other)
 
     if not no_plan: Ingress.output_to_json(plan, "./plan.json")
     

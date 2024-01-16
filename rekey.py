@@ -1,7 +1,15 @@
 import sys
 import getopt
 import json
+from main import Ingress
 
+def help():
+    print("Syntax: python rekey.py [-h] path/to/plan.json")
+    print("""takes the plan.json created by main.py and saves rekey.json with the correct amount of keys reqired from each portal
+
+    Options:
+        h: calls this help function
+    """)
 def main(opts, args):
     assert len(args) == 1, f"ERROR: rekey only accepts one positional argument, {len(args)} were given"
 
@@ -14,7 +22,7 @@ def main(opts, args):
     for key in steps:
         for link in steps[key]["links"]:
             keys_required[link] += 1
-    
+
     for key in steps:
         steps[key]["keys"] = keys_required[key]
 
@@ -24,20 +32,9 @@ def main(opts, args):
     with open("rekey.json", "w", encoding="utf-8") as f:
         json.dump(input, f, ensure_ascii=False, indent=2)
         print("rekey.json created successfuly")
+    
+    Ingress.copy_to_clipboard(input)
 
 if __name__ == "__main__":
-    opts, args = getopt.getopt(sys.argv[1:], "", [])
+    opts, args = getopt.getopt(sys.argv[1:], "h", [])
     main(opts, args)
-
-# {
-#     "key1": [],
-#     "key2": ["key1"],
-#     "key3": ["key1", "key2"],
-#     "key4": ["key2", "key3"],
-#  }
-# {
-#     "key1": 2,
-#     "key2": 2,
-#     "key3": 1,
-#     "key4": 0,
-#  }

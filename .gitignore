@@ -4,6 +4,7 @@ input.json
 output.json
 plan.json
 rekey.json
+snapshot.json
 __pycache__
 venv
 .vscode
