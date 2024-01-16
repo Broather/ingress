@@ -31,7 +31,7 @@ class Portal:
     def get_label(self) -> str:
         return self.label
     
-    def distance(self, other) -> float:
+    def distance(self, other: object) -> float:
         """
         Haversine distance between 2 Portals
 
@@ -41,19 +41,21 @@ class Portal:
 
         returns the distance in meters between 2 Portals
         """
-        # Convert latitude and longitude from degrees to radians
-        lat1, lng1, lat2, lng2 = map(math.radians, [self.lat, self.lng, other.lat, other.lng])
+        if isinstance(other, Portal):
+            # Convert latitude and longitude from degrees to radians
+            lat1, lng1, lat2, lng2 = map(math.radians, [self.lat, self.lng, other.lat, other.lng])
 
-        # Haversine formula
-        dlat = lat2 - lat1
-        dlng = lng2 - lng1
-        a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlng / 2) ** 2
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+            # Haversine formula
+            dlat = lat2 - lat1
+            dlng = lng2 - lng1
+            a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlng / 2) ** 2
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-        RADIUS_OF_EARTH = 6371000 # meters
-        distance = RADIUS_OF_EARTH * c
+            RADIUS_OF_EARTH = 6371000 # meters
+            distance = RADIUS_OF_EARTH * c
 
-        return distance
+            return distance
+        return -1
 
     @staticmethod
     def from_latLng(latLng: dict):
@@ -103,6 +105,17 @@ class Field:
     
     def __repr__(self) -> str:
         return str(self.portals)
+
+    def get_area(self) -> float:
+        sides = list(itertools.starmap(Portal.distance, itertools.combinations(self.portals, 2)))
+
+        # Semi-perimeter of the triangle
+        s = sum(sides) / 2
+
+        # Heron's formula for area of a triangle
+        area = math.sqrt(s * (s - sides[0]) * (s - sides[1]) * (s - sides[2]))
+
+        return area
 
     def get_level(self) -> int:
         return self.level
@@ -187,6 +200,18 @@ class Tree:
     def __init__(self, root: Field) -> None:
         self.root = root
         self.root.grow()
+
+    def get_area(self, field: Field = None, snowball = 0):
+        if field == None:
+            field = self.root
+
+        snowball += field.get_area()
+        
+        for child in field.children:
+            snowball = self.get_area(child, snowball)
+
+        return snowball
+        
 
     def display(self, field: Field = None):
         if field is None:
@@ -487,6 +512,7 @@ def main(opts: list[tuple[str, str]], args):
     Ingress.output_to_json(output + other, "./output.json")
     Ingress.copy_to_clipboard(output + other)
 
+    print(f"Total area of tree is {tree.get_area()} m^2")
     if not no_plan: Ingress.output_to_json(plan, "./plan.json")
     
 if __name__ == "__main__":
