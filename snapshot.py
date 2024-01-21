@@ -2,6 +2,7 @@ import getopt
 import sys
 import json
 import itertools
+import math
 from main import Ingress, Portal
 
 class Link:
@@ -34,13 +35,29 @@ class Link:
             
 class Field:
     instance_count = 0
+    instance_total_MU = 0
+
     def __init__(self, l1: Link, l2: Link, l3: Link, color) -> None:
         self.portals = l1.portals | l2.portals | l3.portals
         self.color = color
         Field.instance_count += 1
+        Field.instance_total_MU += math.ceil(self.get_MU())
 
     def __repr__(self) -> str:
         return f"{self.portals}"
+    
+    def get_MU(self) -> float:
+        sides = list(itertools.starmap(Portal.distance, itertools.combinations(self.portals, 2)))
+        assert len(sides) == 3, f"field {self} has {len(sides)}, should have 3"
+        
+        # Semi-perimeter of the triangle
+        s = sum(sides) / 2
+
+        # Heron's formula for area of a triangle
+        area = math.sqrt(s * (s - sides[0]) * (s - sides[1]) * (s - sides[2]))
+
+        MU_COEFICIENT = 4.25 * 10**-5
+        return math.ceil(MU_COEFICIENT*area)
 
 def my_append(link: Link, output: list, only_links: bool) -> list:
     """
@@ -88,7 +105,7 @@ def help():
         step_number:int numbered step to take the snapshot at
     Options:
         h: calls this help function
-        h: renders only links
+        l: renders only links
         p: defines which portal groups to use in making fields (only way I could think of to get portal data here)
     """)
 
@@ -145,6 +162,7 @@ def main(opts: list[tuple[str, str]], args):
     print(f"Links made: {Link.instance_count}")
     print(f"Fields made: {Field.instance_count}")
     print(f"AP from links and fields: {AP_FOR_CREATING_A_LINK*Link.instance_count + AP_FOR_CREATING_A_FIELD*Field.instance_count}")
+    print(f"estimated MU from fields: {Field.instance_total_MU}")
 
 if __name__ == "__main__":
     opts, args = getopt.getopt(sys.argv[1:], "hlp:", [])
