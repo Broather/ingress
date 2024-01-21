@@ -28,6 +28,12 @@ class Portal:
     def get_latlng(self) -> dict:
         return {"lat": self.lat, "lng": self.lng}
 
+    def get_lat(self) -> float:
+        return self.lat
+
+    def get_lng(self) -> float:
+        return self.lng
+
     def get_label(self) -> str:
         return self.label
     
