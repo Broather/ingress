@@ -1,10 +1,7 @@
 plans
 portals
-input.json
-output.json
-plan.json
-rekey.json
-snapshot.json
+*.json
+*.png
 __pycache__
 venv
 .vscode
