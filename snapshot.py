@@ -96,6 +96,27 @@ def render(object: Link|Field) -> dict:
         raise Exception(f"ERROR attempted to render unrecognised object of type: {type(object)}")
     return data
 
+def render_plan(steps: dict, step_to_stop_at: int, only_links: bool) -> list[dict]:
+    relevant_steps = list(itertools.islice(steps, step_to_stop_at))
+    print(f"Total steps: {len(steps)}, going through {step_to_stop_at} of them")
+
+    blue = "#0022ff"
+    green = "#00ff08"
+    output = []
+    for key in relevant_steps[:-1]:
+        for other in steps[key]["links"]:
+            # output.append(Link(key, other))
+            output = my_append(Link(key, other, green), output, only_links)
+
+    # last step is colored blue
+    last_step = relevant_steps[-1]
+    for other in steps[last_step]["links"]:
+        # output.append(Link(key, other))
+        output = my_append(Link(last_step, other, blue), output, only_links)
+    
+    output = list(map(render, output))
+    return output
+    
 def help():
     print("Syntax: python snapshot.py [-hl] [-p comma_separated_list[<PV|VP|..>]] path/to/plan.json step_number")
     print("""simulates going through the plan's steps and creates snapshot.json as the progress when stopped at step_number 
@@ -129,30 +150,16 @@ def main(opts: list[tuple[str, str]], args):
     assert Ingress.used_portals, f"no portals selected to split with, make sure you are using -p"
     try:
         with open(path, "r", encoding="utf-8") as f:
-            input = json.load(f)
-        steps: dict = input[0]["Steps"]
+            input: list[dict] = json.load(f)
     except FileNotFoundError:
         print(f"{path} not found")
         return
+        
+    if steps := input[0].get("Steps") == None:
+        assert False, f"ERROR: unrecognised input file {path}"
 
-    relevant_steps = list(itertools.islice(steps, step_to_stop_at))
-    print(f"Total steps: {len(steps)}, going through {step_to_stop_at} of them")
+    output = render_plan(steps, step_to_stop_at, only_links)
 
-    blue = "#0022ff"
-    green = "#00ff08"
-    output = []
-    for key in relevant_steps[:-1]:
-        for other in steps[key]["links"]:
-            # output.append(Link(key, other))
-            output = my_append(Link(key, other, green), output, only_links)
-
-    # last step is colored blue
-    last_step = relevant_steps[-1]
-    for other in steps[last_step]["links"]:
-        # output.append(Link(key, other))
-        output = my_append(Link(last_step, other, blue), output, only_links)
-    
-    output = list(map(render, output))
     Ingress.output_to_json(output, "./snapshot.json")
     Ingress.copy_to_clipboard(output)
 
