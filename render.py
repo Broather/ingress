@@ -55,7 +55,7 @@ def plot_IITC_elements(input) -> None:
         tl = Portal("top left", lat = max(all_latitudes), lng = min(all_longitudes))
         br = Portal("bottom right", lat = min(all_latitudes), lng = max(all_longitudes))
         center = Portal("center", lat = tl.lat-(abs(tl.lat - br.lat)/2), lng = tl.lng+(abs(tl.lng-br.lng)/2))
-        plt.plot(center.lng, center.lat, "ro")
+        # plt.plot(center.lng, center.lat, "ro")
         
         delta_longitude = abs(tl.lng - br.lng)
         delta_latitude = abs(br.lat - tl.lat)
@@ -63,22 +63,22 @@ def plot_IITC_elements(input) -> None:
             # put points on left and right side centers
             ptl = Portal("top or left center point", lat = center.lat, lng = tl.lng)
             pbr = Portal("bottom or right center point", lat = center.lat, lng = br.lng)
-            # TODO: tl.transform(ptl, delta_longitude/2 - delta_latitude/2)
-            # TODO: br.transform(pbr, delta_longitude/2 - delta_latitude/2)
+            tl.transform(ptl, delta_longitude/2 - delta_latitude/2)
+            br.transform(pbr, delta_longitude/2 - delta_latitude/2)
         elif delta_latitude > delta_longitude:
             # put points on top and bottom side centers
             ptl = Portal("top or left center point", lat = tl.lat, lng = center.lng)
             pbr = Portal("bottom or right center point", lat = br.lat, lng = center.lng)
-            # TODO: tl.transform(ptl, delta_latitude/2 - delta_longitude/2)
-            # TODO: br.transform(pbr, delta_latitude/2 - delta_longitude/2)
+            tl.transform(ptl, delta_latitude/2 - delta_longitude/2)
+            br.transform(pbr, delta_latitude/2 - delta_longitude/2)
         else:
             # deltas have 1:1 ratio, no action required
             pass
 
         
 
-        # TODO: tl.transform(center, pythagorus(PADDING)) // moves tl outwards by sqrt(PADDING**2+PADDING**2)
-        # TODO: br.transform(center, pythagorus(PADDING)) // moves tl outwards by sqrt(PADDING**2+PADDING**2)
+        # TODO: tl.transform(center, pythagoras(PADDING)) // moves tl outwards by sqrt(PADDING**2+PADDING**2)
+        # TODO: br.transform(center, pythagoras(PADDING)) // moves tl outwards by sqrt(PADDING**2+PADDING**2)
         plt.xlim(tl.lng, br.lng)
         plt.ylim(br.lat, tl.lat)
 

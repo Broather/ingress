@@ -37,6 +37,25 @@ class Portal:
     def get_label(self) -> str:
         return self.label
     
+    def transform(self, other_portal: object, distance: float) -> None:
+        if isinstance(other_portal, Portal):
+            """moves portal along the vector [other_portal, self] by distance (made by GPT-3.5)"""
+            
+            vector_lng = self.lng - other_portal.lng
+            vector_lat = self.lat - other_portal.lat
+            magnitude = math.sqrt(vector_lng**2 + vector_lat**2)
+
+            assert magnitude != 0, "ERROR: Portal.transform is attempting to transform with a portal that has the same coordinates as self"
+            # Normalize the vector (convert it to a unit vector)
+            vector_lng /= magnitude
+            vector_lat /= magnitude
+
+            # Update the coordinates based on the normalized vector and distance
+            self.lng += vector_lng * distance
+            self.lat += vector_lat * distance
+        else:
+            assert False, f"ERROR: Portal.transform recieved obeject of type {type(other_portal)}. Expected type Portal"
+
     def distance(self, other: object) -> float:
         """
         Haversine distance between 2 Portals
