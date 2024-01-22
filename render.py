@@ -7,8 +7,8 @@ import imageio
 from main import Ingress, Portal
 from snapshot import render_plan 
 
-def create_gif(images_folder: str, output_gif_path: str, fps: float = 5):
-    """creates a gif from a directory of .png images (made by GPT-3.5)"""
+def create_gif(images_folder: str, output_gif_path: str, fps: int = 5):
+    """creates a gif from a directory of .png images (made by GPT-3.5 modified by me)"""
     images = []
     
     png_filenames: list[str] = list(filter(lambda filename: filename.endswith(".png"), os.listdir(images_folder)))
@@ -20,7 +20,7 @@ def create_gif(images_folder: str, output_gif_path: str, fps: float = 5):
 
     # Create GIF
     imageio.mimwrite(output_gif_path, images, fps=fps, loop=0)
-    
+
 def clear_and_setup_plot() -> None:
     plt.close()
 
@@ -33,8 +33,8 @@ def create_directory(path: str) -> None:
     if not exists:
         os.makedirs(path)
         
-def plot_IITC_elements(input, center) -> None:
-    MARGIN = 5*10**-4
+def plot_IITC_elements(input) -> None:
+    PADDING = 5*10**-5
     all_longitudes = []
     all_latitudes = []
     
@@ -50,9 +50,37 @@ def plot_IITC_elements(input, center) -> None:
             plt.fill(longitudes, latitudes, facecolor=IITC_element["color"], edgecolor=IITC_element["color"], linewidth=2, alpha=0.3)
         else:
             print(f"WARNING: plot_IITC_elements attepting to plot IITC element of type {IITC_element['type']}")
-    if center and (all_longitudes or all_latitudes):
-        plt.xlim((min(all_longitudes)-MARGIN, max(all_longitudes)+MARGIN))
-        plt.ylim((min(all_latitudes)-MARGIN, max(all_latitudes)+MARGIN))
+    if all_longitudes and all_latitudes:
+        # TODO: make sure the fact that im assuming northern hemesphere and eastern hemesphere doesnt screw me over
+        tl = Portal("top left", lat = max(all_latitudes), lng = min(all_longitudes))
+        br = Portal("bottom right", lat = min(all_latitudes), lng = max(all_longitudes))
+        center = Portal("center", lat = tl.lat-(abs(tl.lat - br.lat)/2), lng = tl.lng+(abs(tl.lng-br.lng)/2))
+        plt.plot(center.lng, center.lat, "ro")
+        
+        delta_longitude = abs(tl.lng - br.lng)
+        delta_latitude = abs(br.lat - tl.lat)
+        if delta_longitude > delta_latitude:
+            # put points on left and right side centers
+            ptl = Portal("top or left center point", lat = center.lat, lng = tl.lng)
+            pbr = Portal("bottom or right center point", lat = center.lat, lng = br.lng)
+            # TODO: tl.transform(ptl, delta_longitude/2 - delta_latitude/2)
+            # TODO: br.transform(pbr, delta_longitude/2 - delta_latitude/2)
+        elif delta_latitude > delta_longitude:
+            # put points on top and bottom side centers
+            ptl = Portal("top or left center point", lat = tl.lat, lng = center.lng)
+            pbr = Portal("bottom or right center point", lat = br.lat, lng = center.lng)
+            # TODO: tl.transform(ptl, delta_latitude/2 - delta_longitude/2)
+            # TODO: br.transform(pbr, delta_latitude/2 - delta_longitude/2)
+        else:
+            # deltas have 1:1 ratio, no action required
+            pass
+
+        
+
+        # TODO: tl.transform(center, pythagorus(PADDING)) // moves tl outwards by sqrt(PADDING**2+PADDING**2)
+        # TODO: br.transform(center, pythagorus(PADDING)) // moves tl outwards by sqrt(PADDING**2+PADDING**2)
+        plt.xlim(tl.lng, br.lng)
+        plt.ylim(br.lat, tl.lat)
 
 def plot_plan(plan):
     pass
@@ -106,7 +134,7 @@ def main(opts, args):
             clear_and_setup_plot()
 
             IITC_elements = render_plan(steps, step_to_stop_at, only_links)
-            plot_IITC_elements(IITC_elements, True)
+            plot_IITC_elements(IITC_elements)
             
             # add portals on top
             longitudes = list(map(Portal.get_lng, Ingress.used_portals))
