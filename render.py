@@ -4,8 +4,12 @@ import json
 import matplotlib.pyplot as plt
 import os
 import imageio
+import math
 from main import Ingress, Portal
 from snapshot import render_plan 
+
+def pythagoras(a):
+    return math.sqrt(a**2+a**2)
 
 def create_gif(images_folder: str, output_gif_path: str, fps: int = 5):
     """creates a gif from a directory of .png images (made by GPT-3.5 modified by me)"""
@@ -34,7 +38,6 @@ def create_directory(path: str) -> None:
         os.makedirs(path)
         
 def plot_IITC_elements(input) -> None:
-    PADDING = 5*10**-5
     all_longitudes = []
     all_latitudes = []
     
@@ -60,25 +63,26 @@ def plot_IITC_elements(input) -> None:
         delta_longitude = abs(tl.lng - br.lng)
         delta_latitude = abs(br.lat - tl.lat)
         if delta_longitude > delta_latitude:
+            PADDING = delta_longitude*.02
             # put points on left and right side centers
             ptl = Portal("top or left center point", lat = center.lat, lng = tl.lng)
             pbr = Portal("bottom or right center point", lat = center.lat, lng = br.lng)
             tl.transform(ptl, delta_longitude/2 - delta_latitude/2)
             br.transform(pbr, delta_longitude/2 - delta_latitude/2)
         elif delta_latitude > delta_longitude:
+            PADDING = delta_latitude*.02
             # put points on top and bottom side centers
             ptl = Portal("top or left center point", lat = tl.lat, lng = center.lng)
             pbr = Portal("bottom or right center point", lat = br.lat, lng = center.lng)
             tl.transform(ptl, delta_latitude/2 - delta_longitude/2)
             br.transform(pbr, delta_latitude/2 - delta_longitude/2)
         else:
+            PADDING = delta_latitude*.02
             # deltas have 1:1 ratio, no action required
             pass
 
-        
-
-        # TODO: tl.transform(center, pythagoras(PADDING)) // moves tl outwards by sqrt(PADDING**2+PADDING**2)
-        # TODO: br.transform(center, pythagoras(PADDING)) // moves tl outwards by sqrt(PADDING**2+PADDING**2)
+        tl.transform(center, pythagoras(PADDING)) # moves tl outwards by sqrt(PADDING**2+PADDING**2)
+        br.transform(center, pythagoras(PADDING)) # moves tl outwards by sqrt(PADDING**2+PADDING**2)
         plt.xlim(tl.lng, br.lng)
         plt.ylim(br.lat, tl.lat)
 
