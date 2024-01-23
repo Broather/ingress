@@ -9,7 +9,7 @@ IITC intel Ingress -> input.json -> main.py <
                                               -> plan.json -> snapshot.py -> snaphot.json -> IITC intel ingress
 
                                                     -> output.json -> (render.py) -> output.png
-(some drawing interface) -> input.json -> main.py <  
+portal data -> (some drawing interface) -> input.json -> main.py <  
                                                     -> plan.json -> (render.py) -> plan.gif
 
                                     -> output.png
@@ -21,11 +21,14 @@ main.py -> (some drawing interface) -> plan.json
 - [x] Ingress.plan takes the tree, starting point and route to make the plan
 - [x] snapshot.py -p PV path/to/plan.json step_number returns an IITC output of a snapshot of the links and fields created until a certain step
 
-- [ ] render.py path/to/output.json creates output.png from a .json file with IITC giberish init`
-    - [ ] render.py path/to/plan.json creates output.gif with each step of the plan
+- [x] render.py path/to/output.json creates output.png from a .json file with IITC giberish init`
+- [x] render.py path/to/plan.json creates output.gif with each step of the plan
+- [ ] merge snapshot into render and plot list[Link|Field|Portal] directly instead of map(render, list[Link|Field|Portal]) -> list[IITC_elements]
+- [ ] introduce some OOP to make things more flexible
+    - [ ] snapshot.py have step 1 be the finished product
+    - [ ] render.py when rendering plan have a couple of frames of the first frame (the finished product)
 
-- [ ] gain independence from intel.ingress.com by just getting the portal data and making a web app of my own
-
+- [ ] gain independence from intel.ingress.com by making my own drawing UI thing
 - [ ] implement herringbones
 
 - [ ] feed it street data to get accurate route length

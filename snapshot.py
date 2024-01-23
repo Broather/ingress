@@ -5,6 +5,10 @@ import itertools
 import math
 from main import Ingress, Portal
 
+color_palette = {
+    "blue": "#0022ff",
+    "green": "#00ff08" 
+}
 class Link:
     instance_count = 0
     def __init__(self, frm, to, color) -> None:
@@ -65,8 +69,6 @@ def my_append(link: Link, output: list, only_links: bool) -> list:
     """
     # check how many links in output are touching link
     is_touching_map = list(map(link.is_touching, output))
-    amount_of_links_touching = sum(is_touching_map)
-    # print(f"There are {amount_of_links_touching} links touching {link}")
     output.append(link)
     if not only_links:
         # check if any combination of link and 2 links that are touching create a closed loop
@@ -79,7 +81,7 @@ def my_append(link: Link, output: list, only_links: bool) -> list:
 
     return output
     
-def render(object: Link|Field) -> dict:
+def render(object: Link|Field|Portal) -> dict:
     if isinstance(object, Link):
         data = {
             "type": "polyline",
@@ -92,6 +94,13 @@ def render(object: Link|Field) -> dict:
             "latLngs": [{"lat": portal.lat, "lng": portal.lng} for portal in object.portals],
             "color": object.color
         }
+    # TODO: all portals are colored blue, not elegant 
+    elif isinstance(object, Portal):
+        data = {
+            "type": "marker",
+            "latLng": {"lat": object.lat, "lng": object.lng},
+            "color": color_palette["blue"]
+        }
     else:
         raise Exception(f"ERROR attempted to render unrecognised object of type: {type(object)}")
     return data
@@ -100,19 +109,22 @@ def render_plan(steps: dict, step_to_stop_at: int, only_links: bool) -> list[dic
     relevant_steps = list(itertools.islice(steps, step_to_stop_at))
     print(f"Total steps: {len(steps)}, going through {step_to_stop_at} of them")
 
-    blue = "#0022ff"
-    green = "#00ff08"
     output = []
     for key in relevant_steps[:-1]:
         for other in steps[key]["links"]:
             # output.append(Link(key, other))
-            output = my_append(Link(key, other, green), output, only_links)
+            output = my_append(Link(key, other, color_palette["green"]), output, only_links)
 
     # last step is colored blue
     last_step = relevant_steps[-1]
+
+    # append the portal the player is interacting with
+    if last_step_portal := Ingress.find_portal(last_step): 
+        output.append(last_step_portal)
+        
     for other in steps[last_step]["links"]:
         # output.append(Link(key, other))
-        output = my_append(Link(last_step, other, blue), output, only_links)
+        output = my_append(Link(last_step, other, color_palette["blue"]), output, only_links)
     
     output = list(map(render, output))
     return output
