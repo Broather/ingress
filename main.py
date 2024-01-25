@@ -129,7 +129,14 @@ class Field:
         self.is_herringbone = is_herringbone
     
     def __repr__(self) -> str:
-        return str(self.portals)
+        return f"{self.portals} {self.count_portals()}"
+
+    def get_links(self) -> list[frozenset]:
+        return list(map(frozenset, itertools.combinations(self.portals, 2)))
+
+    def get_MU(self) -> int:
+        MU_COEFICIENT = 4.25 * 10**-5
+        return math.ceil(MU_COEFICIENT*self.get_area())
 
     def get_area(self) -> float:
         sides = list(itertools.starmap(Portal.distance, itertools.combinations(self.portals, 2)))
@@ -144,6 +151,10 @@ class Field:
 
     def get_level(self) -> int:
         return self.level
+
+    def is_leaf(self):
+        """returns True if field does not have children"""
+        return len(self.children) == 0
 
     def is_in(self, portal: Portal) -> bool:
         """
@@ -222,21 +233,44 @@ class Field:
                 child.grow()
 
 class Tree:
+    all_instances = []
+
     def __init__(self, root: Field) -> None:
         self.root = root
         self.root.grow()
+        Tree.all_instances.append(self)
+        print(self)
+    
+    def __repr__(self) -> str:
+        return f"{self.root} {self.get_level_range()} {self.get_MU()} MU {len(self.get_links())} links {len(self.get_fields())} fields"
 
-    def get_area(self, field: Field = None, snowball = 0):
-        if field == None:
-            field = self.root
+    def get_fields(self) -> list[Field]:
+        """returns a list of all fields in a breath first order (made by GTP-3.5)"""
 
-        snowball += field.get_area()
-        
-        for child in field.children:
-            snowball = self.get_area(child, snowball)
+        if self.root is None:
+            return []
 
-        return snowball
-        
+        fields = []
+        queue = [self.root]
+
+        while queue:
+            current_node = queue.pop(0)
+            fields.append(current_node)
+
+            for child in current_node.children:
+                queue.append(child)
+
+        return fields
+    
+    def get_level_range(self) -> tuple[int, int]:
+        """returns a tree's range of levels or thicc-ness"""
+        leaves = list(filter(Field.is_leaf, self.get_fields()))
+        leaf_levels = list(map(Field.get_level, leaves))
+
+        return (min(leaf_levels), max(leaf_levels))
+
+    def get_MU(self):
+        return sum(map(Field.get_MU, self.get_fields()))
 
     def display(self, field: Field = None):
         if field is None:
@@ -247,35 +281,15 @@ class Tree:
         for child in field.children:
             self.display(child)
     
-    def get_links(self, field: Field = None, snowball: list[tuple] = None) -> list[tuple]:
-        if snowball == None: snowball = []
+    def get_links(self) -> list[frozenset]:
+        links = set()
+        for field in self.get_fields():
+            links.update(field.get_links())
 
-        if field == None:
-            field = self.root
-            snowball.extend(itertools.combinations(field.portals, 2))
-        
-        # if fiels is NOT a leaf, aka, has children
-        if field.children:
-            assert field.split_portal != None, f"ERROR: field: {field} has childern but not assigned split_portal"
-            snowball.extend([(portal, field.split_portal) for portal in field.portals])
-            
-            for child in field.children:
-                snowball = self.get_links(child, snowball)
-        
-        # (root_outer_links + (root.portals and root.split_portal) + (child.portals and child.split_portal))
-        return snowball
+        return list(links)
 
     def get_fields_portal_is_a_part_of(self, portal: Portal, field: Field = None, snowball: list[Field] = None) -> list[Field]:
-        if snowball == None: snowball = []
-        if field == None: field = self.root
-
-        if portal in field.portals:
-            snowball.append(field)
-        
-        for child in field.children:
-            snowball = self.get_fields_portal_is_a_part_of(portal, child, snowball)
-
-        return snowball
+        return list(filter(lambda f: portal in f.portals, self.get_fields()))
         
     def get_lowest_level_fields_level_portal_is_a_part_of(self, portal: Portal) -> int:
         fields = self.get_fields_portal_is_a_part_of(portal)
@@ -283,15 +297,19 @@ class Tree:
         return level
 
 class Ingress:
-    OFFSET_AMOUNT = 0.0001
     portal_group_map = {
         "PV": "./portals/pavilosta.json",
-        "VP": "./portals/ventspils.json"}
+        "AR": "./portals/akmens-rags.json",
+        "ZP": "./portals/ziemupe.json",
+        "CR": "./portals/cirava.json",
+        "GD": "./portals/gudenieki.json",
+        "JK": "./portals/jurkalne.json",
+        "VP": "./portals/ventspils.json",
+        }
         
     used_portals: list[Portal] = []
 
-    color_maps = {
-        "rainbow" : {
+    color_maps = {"rainbow" : {
             "0": "#ff0000",
             "1": "#ffff00",
             "2": "#00ff00",
@@ -369,51 +387,45 @@ class Ingress:
                 
         markers = [e for e in IITC_elements if e["type"] == "marker" and e["color"] == white]
         polylines = [e for e in IITC_elements if e["type"] == "polyline" and e["color"] == white]
-        assert len(markers) == len(polylines), f"ERROR: amount of markers and polylines should match! markers: {len(markers)}, polylines: {len(polylines)}"
+        assert len(markers) == len(polylines), f"ERROR: amount of markers and polylines should match, markers: {len(markers)}, polylines: {len(polylines)}"
 
         polygons = [e for e in IITC_elements if e["type"] == "polygon" and e["color"] == white]
-        assert len(polygons) == len(markers), f"ERROR: amount of polygons and (marker, polyline) pairs should match: polygons: {len(polygons)}, marker-polyline: {len(markers)} "
 
-        groups = []
-        for marker, polyline, polygon in zip(markers, polylines, polygons):
-            portal_order = Portal.from_IITC_marker_polyline(marker, polyline)
-            if len(polygon['latLngs']) == 3:
-                base_field = Field(*Portal.from_IITC_polygon(polygon), 0)
-            else:
-                assert len(polygon['latLngs']) == 4, f"ERROR: unable to parse polygon with {len(polygon['latLngs'])} points"
-                herringbone_portals = Portal.from_IITC_polygon(polygon)
-                herringbone_base_portals = [portal for portal in herringbone_portals if portal not in portal_order]
-                base_field = Field(herringbone_portals[0], *herringbone_base_portals, 0, is_herringbone = True)
-            groups.append((portal_order, base_field))
+        base_fields = []
+        routes = []
+
+        for polygon in polygons:
+            base_fields.append(Field(*Portal.from_IITC_polygon(polygon), 0))
+
+        for marker, polyline in zip(markers, polylines):
+            routes.append(Portal.from_IITC_marker_polyline(marker, polyline))
 
         other = [e for e in IITC_elements if e["color"] != white]
 
-        return (groups, other)
+        return (base_fields, routes, other)
 
     @staticmethod
-    def render(field: Field, color_map: dict, offset: bool, onlyleaves: bool, output: list = None) -> list[dict]:
+    def render(fields: list[Field], color_map: dict, output: list = None) -> list[dict]:
         if output == None: output = []
-        if offset and onlyleaves and field.level == 0: print("WARNING: having offset and onlyleaves enabled at the same time makes 0 sense")
 
-        is_leaf = (len(field.children) == 0)
-        if not onlyleaves or (onlyleaves and is_leaf):
+        for field in fields:
             data = {
                 "type": "polygon",
-                "latLngs": [{"lat": portal.lat + Ingress.OFFSET_AMOUNT*offset*field.level, "lng": portal.lng} for portal in field.portals],
+                "latLngs": [{"lat": portal.lat, "lng": portal.lng} for portal in field.portals],
                 "color": color_map.get(str(field.level), color_map["default"])
             }
             output.append(data)
 
-        for child in field.children:
-            output = Ingress.render(child, color_map, offset, onlyleaves, output)
-        
         return output
 
+    # TODO: overhaul to handle all trees and all routes
     @staticmethod
-    def plan(tree: Tree, portal_order: list[Portal]) -> dict:
+    def plan(trees: list[Tree], routes: list[set[Portal]]) -> dict:
         AVERAGE_WALKING_SPEED = 84 # meters/minute
         COOLDOWN_BETWEEN_HACKS = 5 # minutes
 
+        # TODO: make route be a set of portals
+        # TODO: warn for portals missed sum(count portals of all tree roots) - len(map(set.union, routes))
         root = tree.root
         all_root_portals = root.get_inside_portals() + root.portals
         # assure that portal_order contains root.portals
@@ -478,7 +490,6 @@ def help(first_time = False):
     print("""
     Options:
         h: calls this help function
-        o: adds an offset to layers so it's easier to tell them apart
         l: display only the leaf fields, aka the top most layer of each section
         p: defines which portal groups to use in making fields (only way I could think of to get portal data here)
         c: selects the color map to use, default is rainbow for all layers
@@ -487,7 +498,6 @@ def help(first_time = False):
 def main(opts: list[tuple[str, str]], args):
     # defaults part
     color_map = Ingress.color_maps["rainbow"]
-    offset = False
     onlyleaves = False
     no_plan = False
     
@@ -503,15 +513,15 @@ def main(opts: list[tuple[str, str]], args):
         elif o == "-c":
             assert a in Ingress.color_maps.keys(), f"ERROR: color map {a} not recognised"
             color_map = Ingress.color_maps[a]
-        elif o == "-o":
-            offset = True
         elif o == "-l":
             onlyleaves = True
         elif o == "--noplan":
             no_plan = True
         else:
-            assert False, f"ERROR: unsupported option: {o}"
+            assert False, f"ERROR: unparsed option: {o}"
     
+    assert Ingress.used_portals, f"no portals selected to split with, make sure you are using -p"
+    print(f"{len(Ingress.used_portals)} portals in Ingress.used_portals")
     try:
         with open('./input.json', 'r') as f:
             input: list[dict] = json.load(f)
@@ -522,24 +532,28 @@ def main(opts: list[tuple[str, str]], args):
         print("input.json empty, make sure to copy/paste whatever IITC gives you into input.json")
         return
 
-    assert Ingress.used_portals, f"no portals selected to split with, make sure you are using -p"
-    groups, other = Ingress.parse_input(input)
+    
+    # base_fields get split, routes get applied to them to make a plan, other is unused
+    base_fields, routes, other = Ingress.parse_input(input)
 
     output = []
     plan = []
-    for group in groups:
-        portal_order, base_field = group
+    for base_field in base_fields:
         tree = Tree(base_field)
+        fields = tree.get_fields()
+
+        if onlyleaves:
+            fields = list(filter(Field.is_leaf, fields))
         
-        output.extend(Ingress.render(tree.root, color_map, offset, onlyleaves))
-        plan.append(Ingress.plan(tree, portal_order))
-        
+        output.extend(Ingress.render(fields, color_map))
+
+    # plan.append(Ingress.plan(Tree.all_instances, routes))
+
     Ingress.output_to_json(output + other, "./output.json")
     Ingress.copy_to_clipboard(output + other)
 
-    print(f"Total area of tree is {tree.get_area()} m^2")
     if not no_plan: Ingress.output_to_json(plan, "./plan.json")
     
 if __name__ == "__main__":
-    opts, args = getopt.getopt(sys.argv[1:], "hp:c:ol", ["noplan"])
+    opts, args = getopt.getopt(sys.argv[1:], "hp:c:l", ["noplan"])
     main(opts, args)
