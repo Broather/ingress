@@ -33,6 +33,7 @@ def create_gif(images_folder: str, output_gif_path: str, fps: int = 5):
     # Create GIF
     imageio.mimwrite(output_gif_path, images, fps=fps, loop=0)
 
+# TODO: put in a class with self.axis_limits = None
 def clear_and_setup_plot(axis_limits: tuple[tuple, tuple] = None) -> None:
     plt.close()
 
@@ -143,6 +144,7 @@ def main(opts, args):
     elif steps := input[0].get("Steps"):
         print("making a gif from a plan\'s steps")
         # render the last step 
+        # TODO: Renderer.plot_step?(step_to_stop_at) that plt.savefig aswell (seems like a waste to plot and not save it)
         last_step = render_plan(steps, len(steps), only_links)
         plot_IITC_elements(last_step)
         # get the axis limits 
