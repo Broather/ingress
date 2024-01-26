@@ -16,7 +16,8 @@ portal data -> (some drawing interface) -> input.json -> main.py <
 - [ ] optimise Tree generating to prefer MU (NOTE: revisit Field.score) (ANOTHER NOTE: it would be choise as if it would make herringbones just because that would get you the most MU) (PS: and make sure to make it as a separate node so I can see number go up)
     - [ ] if multiple split_portals have the same score make em' both and compare the total MU (not that simple)
 
-- [ ] rework Ingress.plan to "apply" a route to any number of trees
+- [x] rework Ingress.plan to "apply" a route to any number of trees
+- [ ] have render.py animate a plan with multiple routes
 - [ ] Ingress.plan should also give a list of portals to remote key view for charging all the fields 
 - [ ] Tree estimates how much XM per day it takes to upkeep if all portals have L8,L7,L6,L6,L5,L5,L4,L4 resonators
 - [ ] merge snapshot into render and plot list[Link|Field|Portal] directly instead of map(render, list[Link|Field|Portal]) -> list[IITC_elements]
@@ -26,6 +27,8 @@ portal data -> (some drawing interface) -> input.json -> main.py <
     - [ ] render.py when rendering plan have a couple of frames of the first frame (the finished product)
 
 - [ ] gain independence from intel.ingress.com by making my own drawing UI thing
+    - [ ] click and drag make multiple points that snap to portals
+    - [ ] can split routes with knife tool
 - [ ] get portal data while abiding tos
     - [ ] implement herringbones
 

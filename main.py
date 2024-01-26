@@ -1,3 +1,4 @@
+from typing import Iterable
 import json
 import itertools
 import getopt, sys
@@ -15,7 +16,7 @@ class Portal:
         self.lng = lng
 
     def __hash__(self) -> int:
-        return hash(self.label)
+        return hash((self.lat, self.lng))
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Portal):
@@ -36,7 +37,7 @@ class Portal:
 
     def get_label(self) -> str:
         return self.label
-    
+        
     def transform(self, other_portal: object, distance: float) -> None:
         if isinstance(other_portal, Portal):
             """moves portal along the vector [other_portal, self] by distance (made by GPT-3.5)"""
@@ -129,7 +130,7 @@ class Field:
         self.is_herringbone = is_herringbone
     
     def __repr__(self) -> str:
-        return f"{self.portals} {self.count_portals()}"
+        return f"{self.portals} {len(self.get_portals())}"
 
     def get_links(self) -> list[frozenset]:
         return list(map(frozenset, itertools.combinations(self.portals, 2)))
@@ -152,6 +153,14 @@ class Field:
     def get_level(self) -> int:
         return self.level
 
+    def get_portals(self) -> list[Portal]:
+        """returns all portals that are inside of field (not including the 3 that make up the field)"""
+        return list(filter(self.is_in, Ingress.used_portals))
+
+    def get_portals_inclusive(self) -> list[Portal]:
+        """returns all portals that are inside of field (including the 3 that make up the field)"""
+        return self.get_portals() + self.portals
+    
     def is_leaf(self):
         """returns True if field does not have children"""
         return len(self.children) == 0
@@ -199,18 +208,12 @@ class Field:
         w1, w2, w3 = barycentric_coordinates(portal, a, b, c)
         return (w1 >= 0) and (w2 >= 0) and (w3 >= 0)
 
-    def count_portals(self) -> int:
-        return sum(list(map(self.is_in, Ingress.used_portals)))
-    
-    def get_inside_portals(self) -> list[Portal]:
-        return [portal for portal in Ingress.used_portals if self.is_in(portal)]
-
     def score(self, center_portal: Portal) -> int:
         """
         splits the Field on portal and returns a score based on the distribution of portals on each of the 3 new fields
         """
         fields = [Field(*outer_portals, center_portal, self.level + 1) for outer_portals in itertools.combinations(self.portals, 2)]
-        portal_counts = [field.count_portals() for field in fields]
+        portal_counts = [len(field.get_portals()) for field in fields]
         return max(portal_counts) - min(portal_counts)
 
     def split(self):
@@ -227,7 +230,7 @@ class Field:
         return [Field(*outer_portals, self.split_portal, self.level + 1) for outer_portals in itertools.combinations(self.portals, 2)]
 
     def grow(self) -> None:
-        if self.count_portals() > 0:
+        if len(self.get_portals()) > 0:
             self.children = self.split()
             for child in self.children:
                 child.grow()
@@ -244,14 +247,14 @@ class Tree:
     def __repr__(self) -> str:
         return f"{self.root} {self.get_level_range()} {self.get_MU()} MU {len(self.get_links())} links {len(self.get_fields())} fields"
 
-    def get_fields(self) -> list[Field]:
-        """returns a list of all fields in a breath first order (made by GTP-3.5)"""
+    def get_fields(self, node: Field = None) -> list[Field]:
+        """returns a list of all lower standing nodes (inclusive). Goes from root if node not given (made by GTP-3.5)"""
 
-        if self.root is None:
-            return []
+        if node is None:
+            node = self.root
 
         fields = []
-        queue = [self.root]
+        queue = [node]
 
         while queue:
             current_node = queue.pop(0)
@@ -281,12 +284,12 @@ class Tree:
         for child in field.children:
             self.display(child)
     
-    def get_links(self) -> list[frozenset]:
+    def get_links(self) -> set[frozenset]:
         links = set()
         for field in self.get_fields():
             links.update(field.get_links())
 
-        return list(links)
+        return links
 
     def get_fields_portal_is_a_part_of(self, portal: Portal, field: Field = None, snowball: list[Field] = None) -> list[Field]:
         return list(filter(lambda f: portal in f.portals, self.get_fields()))
@@ -330,6 +333,13 @@ class Ingress:
         "gray": { 
             "default": "#bbbbbb"}}
     
+    @staticmethod
+    def merge_iterable_to_set(iterable: Iterable):
+        union_set = set()
+        for it in iterable:
+            union_set.update(it)
+        return union_set
+
     @staticmethod
     def find_portal(label: str):
         """
@@ -418,56 +428,62 @@ class Ingress:
 
         return output
 
-    # TODO: overhaul to handle all trees and all routes
     @staticmethod
-    def plan(trees: list[Tree], routes: list[set[Portal]]) -> dict:
+    def plan(routes: list[tuple[Portal]], trees: list[Tree]) -> dict:
         AVERAGE_WALKING_SPEED = 84 # meters/minute
         COOLDOWN_BETWEEN_HACKS = 5 # minutes
 
-        # TODO: make route be a set of portals
-        # TODO: warn for portals missed sum(count portals of all tree roots) - len(map(set.union, routes))
-        root = tree.root
-        all_root_portals = root.get_inside_portals() + root.portals
-        # assure that portal_order contains root.portals
-        if not all([portal in portal_order for portal in root.portals]):
-            print(f"WARNING: route does not go to all field portals for field: {root.portals}")
-        # assure that every portal in root is also present in portal_order
-        if len(all_root_portals) != len(portal_order):
-            print(f"WARNING: route missed {len(all_root_portals) - len(portal_order)} portals in field: {root.portals}")
-        
-        links = tree.get_links()
-        steps = {}
-        visited_portals = []
-        SBUL_count = 0
-        
-        for portal in portal_order:
-            other_portals: list[Portal] = []
-            # TODO: not technically "available"
-            available_links = [link for link in links if portal in link]
-            for link in available_links:
-                other_portals.extend(p for p in link if p != portal and p in visited_portals)
-                # sort by lowest field lvl (asc), but if levels are the same sort them by portal distance (desc)
-                other_portals.sort(key = lambda p: (tree.get_lowest_level_fields_level_portal_is_a_part_of(p), -portal.distance(p)))
+        # warn if there are any portals missed by routes
+        fields = []
+        for tree_fields in map(Tree.get_fields, trees):
+            fields.extend(tree_fields)
 
-            if len(other_portals) > 8: SBUL_count += 1
+        all_portals = Ingress.merge_iterable_to_set(map(Field.get_portals_inclusive, fields))
+        route_portals = Ingress.merge_iterable_to_set(routes)
 
-            steps[portal.get_label()] = {
-                "keys": len(available_links)-len(other_portals),
-                "links": [p.get_label() for p in other_portals]
+        if (missed_portals_count := len(all_portals) - len(route_portals)) > 0:
+            print(f"WARNING: routes missed {missed_portals_count} portal/-s, plan/-s might not be accurate. Missing portals {all_portals.difference(route_portals)}")
+
+        links = Ingress.merge_iterable_to_set(map(Tree.get_links, trees))
+
+        # making a plan for each route
+        visited_portals = set()
+        created_links = set()
+        plan = []
+        for route in routes:
+            steps = {}
+            SBUL_count = 0
+            
+            for step in route:
+                visited_portals.add(step)
+                connected_links = list(filter(set([step]).issubset, links))
+                outbound_links = list(filter(visited_portals.issuperset, links.difference(created_links)))
+                created_links.update(outbound_links)
+
+                if len(outbound_links) > 8: SBUL_count += 1
+
+                # TODO: I hope I have the motivation to rewrite this masterpiece
+                link_order = sorted(outbound_links, key = lambda l: (min(map(Field.get_level, filter(lambda f: l in f.get_links(), fields))), -tuple(l)[0].distance(tuple(l)[1])))
+                
+                steps[step.get_label()] = {
+                "keys": len(connected_links)-len(outbound_links),
+                # TODO: this one's a bit rought aswell
+                "links": list(map(lambda l: tuple(l.difference(set([step])))[0].get_label(), link_order))
                 }
-            visited_portals.append(portal)
-        
-        route_length = round(sum(itertools.starmap(Portal.distance, itertools.pairwise(portal_order))), 2)
-        total_keys_required = len(tree.get_links())
 
-        return {
-            "Title": str(tree.root.portals),
-            "Mods_required": {"SBUL": SBUL_count},
-            "Route_length_(meters)": route_length,
-            "Total_keys_required": total_keys_required,
-            "Estimated_time_to_complete_(minutes)": round(route_length / AVERAGE_WALKING_SPEED + total_keys_required * COOLDOWN_BETWEEN_HACKS, 2),
-            "Steps": steps
-            }
+            route_length = round(sum(itertools.starmap(Portal.distance, itertools.pairwise(route))), 2)
+            total_keys_required = len(links)
+
+            plan.append({
+                "Title": f"{route[0]}...{route[-1]}",
+                "Mods_required": {"SBUL": SBUL_count},
+                "Route_length_(meters)": route_length,
+                "Total_keys_required": total_keys_required,
+                "Estimated_time_to_complete_(minutes)": round(route_length / AVERAGE_WALKING_SPEED + total_keys_required * COOLDOWN_BETWEEN_HACKS, 2),
+                "Steps": steps
+                })
+        
+        return plan
 
     @classmethod
     def add_from_bkmrk(cls, bkmrk: dict) -> None:
@@ -496,12 +512,12 @@ def help(first_time = False):
     """)
 
 def main(opts: list[tuple[str, str]], args):
-    # defaults part
+    # defaults
     color_map = Ingress.color_maps["rainbow"]
     onlyleaves = False
     no_plan = False
     
-    # option parsing part
+    # option parsing
     for o, a in opts:
         if o == "-h":
             help()
@@ -511,8 +527,10 @@ def main(opts: list[tuple[str, str]], args):
                 with open(Ingress.portal_group_map[portal_group.strip()], "r", encoding='utf-8') as f:
                     Ingress.add_from_bkmrk(json.load(f)['portals']['idOthers']['bkmrk'])
         elif o == "-c":
-            assert a in Ingress.color_maps.keys(), f"ERROR: color map {a} not recognised"
-            color_map = Ingress.color_maps[a]
+            if color_map := Ingress.color_maps.get(a) == None:
+                print(f"ERROR: color map {a} not recognised")
+                help()
+                sys.exit(2)
         elif o == "-l":
             onlyleaves = True
         elif o == "--noplan":
@@ -532,12 +550,10 @@ def main(opts: list[tuple[str, str]], args):
         print("input.json empty, make sure to copy/paste whatever IITC gives you into input.json")
         return
 
-    
-    # base_fields get split, routes get applied to them to make a plan, other is unused
+    # base_fields get split, routes get applied to them to make a plan, other just gets appended to output
     base_fields, routes, other = Ingress.parse_input(input)
 
     output = []
-    plan = []
     for base_field in base_fields:
         tree = Tree(base_field)
         fields = tree.get_fields()
@@ -547,12 +563,13 @@ def main(opts: list[tuple[str, str]], args):
         
         output.extend(Ingress.render(fields, color_map))
 
-    # plan.append(Ingress.plan(Tree.all_instances, routes))
 
     Ingress.output_to_json(output + other, "./output.json")
     Ingress.copy_to_clipboard(output + other)
 
-    if not no_plan: Ingress.output_to_json(plan, "./plan.json")
+    if not no_plan: 
+        plan = Ingress.plan(routes, Tree.all_instances)
+        Ingress.output_to_json(plan, "./plan.json")
     
 if __name__ == "__main__":
     opts, args = getopt.getopt(sys.argv[1:], "hp:c:l", ["noplan"])
