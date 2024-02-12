@@ -12,27 +12,37 @@ IITC intel Ingress -> input.json -> main.py <
 portal data -> (some drawing interface) -> input.json -> main.py <  
                                                     -> plan.json -> (render.py) -> plan.gif
 
+## KOSMOS:
+- An algorithm that "finds" 2D shapes in a group of portals 
+- Ingress is a game about making triangles, but what if I make squares? Perfect, equal side squares
+- Like im in a mafia movie and that's my calling card when I pull off a heist (operation)
+- [ ] make an interactive plan-animation (planimation) viewer with a timeline that shows where one route ends and another starts and ability to zoom in with the scroll-wheel
 ## TODO:
-- [ ] optimise Tree generating to prefer MU (NOTE: revisit Field.score) (ANOTHER NOTE: it would be choise as if it would make herringbones just because that would get you the most MU) (PS: and make sure to make it as a separate mode so I can see number go up)
+- [ ] optimise Tree generating to prefer MU
     - [x] spider-web mode: choose split portal to be the closest one to any of min(map(portal.distance, Field.portals))
-    - [x] homogenious mode: choose split portal to evenly distribute the rest of the portals. If multiple portals have a pretty good distribution make all of them and compare how homogenious they are min(my_amplitude(map(Field.count_portals, Field.split(portal))))
+    - [x] homogenious mode: choose split portal to evenly distribute the rest of the portals
+        - [ ] deal with the edge case when there are multiple split_portals with the best distribution possible
     - [x] hybrid mode: a mix between spider and homogen if there's a split portal within a threshold of Field.portals then take that, otherwise one that makes a homogen
     - [ ] absolute max MU mode: make every combination of splitting portals and compare the MU between them (will have to see execution time)
 
 - [x] have some kind of grayscale colormap mapping the range of levels to 0-255 of value of a HSV color
 - [x] have some kind of hue colormap mapping the range of levels to 0-255 of bhue of a HSV color
-- [ ] add a colored legend of IITC elements to the side of all fields
-    - [ ] Tree.get_bounding_box() -> (tl: Portal, br: Portal)
-    - [ ] Ingress.merge_iterable_to_set(map(Tree.get_bounding_box(), all_trees))
+- [x] add a colored legend of IITC elements to the side of all fields
+    - [x] Ingress.bounding_box(fields: list[Field]) -> (tl: Portal, br: Portal)
+- [x] redo render.py plot_IITC_elements to use Ingress.bounding_box
+- [x] have render.py animate a plan with multiple routes
+- [x] have render.py color visited portals green
 - [x] rework Ingress.plan to "apply" a route to any number of trees
-- [ ] have render.py animate a plan with multiple routes
-- [ ] have render.py color visited portals green
-- [ ] Ingress.plan should also give a list of portals to remote key view for charging every portal (600m radius) 
+- [ ] Ingress.bounding_box doesn't scale the view when going from one to another even if it tries to maintain a 1:1 proportion between lat and lng
+- [ ] add percentual padding to Ingress.bounding_box and use it in create_legend
+- [ ] Ingress.create_plan should also give a list of the least amount of portals to remote key view from (600m radius) 
 - [ ] Tree estimates how much XM per day it takes to upkeep if all portals have L8,L7,L6,L6,L5,L5,L4,L4 resonators
-- [ ] merge snapshot into render and plot list[Link|Field|Portal] directly instead of map(render, list[Link|Field|Portal]) -> list[IITC_elements]
+- [ ] implement __hash__ and __eq__ for Link just in case
+- [ ] implement __hash__ and __eq__ for Field just in case
+- [ ] render.py simulate_plan altarnate option that divides each link creation in a separate step (render all green and additively plot)
 
 - [ ] gain independence from intel.ingress.com by making my own drawing UI thing
-    - [ ] get portal data while abiding tos
+    - [ ] get portal data while abiding tos (probs hardcoded .json city files like I've been doing)
     - [ ] click and drag make multiple points that snap to portals
     - [ ] can split routes with knife tool
     - [ ] implement drawing herringbones
