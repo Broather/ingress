@@ -456,11 +456,11 @@ class Ingress:
         if field_level < 0: field_level = display_level-1
         
         digit_bounding_boxes = tuple([bounding_box])
+        digits = [char for char in str(display_level)]
         # NOTE: does not support any number of digits, but when the time comes I'll implement split_bounding_box_vertically(splits = 2)
         if len(digits) > 1:
             digit_bounding_boxes = Ingress.split_bounding_box_vertically(digit_bounding_boxes[0])
                 
-        digits = [char for char in str(display_level)]
         output = []
         for digit, bounding_box in zip(digits, digit_bounding_boxes):
             tl, br = bounding_box
