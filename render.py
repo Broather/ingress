@@ -114,6 +114,10 @@ def main(opts, args):
             return
         elif o == "-l":
             only_links = True
+        elif o == "-a":
+            for portal_group in Ingress.portal_group_map:
+                with open(Ingress.portal_group_map[portal_group], "r", encoding='utf-8') as f:
+                    Ingress.add_from_bkmrk(json.load(f)['portals']['idOthers']['bkmrk'])
         elif o == "-p":
             for portal_group in a.split(","):
                 with open(Ingress.portal_group_map[portal_group.strip()], "r", encoding='utf-8') as f:
@@ -153,5 +157,5 @@ def main(opts, args):
     create_gif(image_folder_path, f"{image_folder_path}/_gif.gif", )
 
 if __name__ == "__main__":
-    opts, args = getopt.getopt(sys.argv[1:], "hlp:", [])
+    opts, args = getopt.getopt(sys.argv[1:], "hlap:", [])
     main(opts, args)
