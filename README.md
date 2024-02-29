@@ -18,7 +18,7 @@ python -m venv venv
 ```
 ### install requirements (just pyperclip for now)
 ```
-python -m pip install pyperclip
+python -m pip install -r requirements.txt
 ```
 ### run it for the first time
 ```
