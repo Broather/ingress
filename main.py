@@ -39,7 +39,6 @@ class Portal:
     def __repr__(self) -> str:
         return f"{self.label}"
 
-
     def get_label(self) -> str:
         return self.label
 
@@ -64,6 +63,11 @@ class Portal:
     def is_contained_by_link(self, other: object) -> bool:
         if isinstance(other, Link):
             return self in other.portals
+        return False
+
+    def is_contained_by_field(self, other: object) -> bool:
+        if isinstance(other, Field):
+            return other.is_in(self)
         return False
     
     def get_links_other_portal(self, other: object):
@@ -353,8 +357,7 @@ class Field:
         return min(potential_split_portals, key = Portal.get_score)
     
     def hybrid(self) -> Portal:
-        potential_split_portals = self.get_portals()
-        zelda_fields = self.get_zelda_fields(subdivisions = 6)
+        zelda_fields = self.get_zelda_fields(subdivisions = 3)
         if any(map(Field.get_portals, zelda_fields)):
             return self.spiderweb()
         else:
@@ -449,8 +452,46 @@ class Ingress:
                      "spiderweb": Field.spiderweb,
                      "homogen": Field.homogen}
 
-    find_split_portal_method = Field.homogen
+    @staticmethod
+    def simulate_step(active_portal: Portal, portals_to_link_to: tuple[Portal], previous_steps: list[tuple[Portal|Link|Field]]) -> tuple[Portal|Link|Field]:
+        if len(portals_to_link_to) == 0: return (active_portal, )
+        links = tuple(map(active_portal.create_link, portals_to_link_to))
 
+        output = []
+        for link in links:
+            touching_links = tuple(filter(link.is_touching, Ingress.flatten_iterable_of_tuples(previous_steps + output)))
+            fields = link.get_fields(touching_links)
+            output.append((link,) + fields)
+
+        return Ingress.flatten_iterable_of_tuples(output)
+
+    @staticmethod
+    def simulate_plan(plan: dict) -> tuple[(tuple, tuple)]:
+        """returns [[bounding_box, route_steps],
+                    ((Portal, Portal), ([Portal], [Link], [Link, Link], ...))]"""
+
+        output = []
+        all_steps = []
+        routes: list = plan["routes"]
+        for route in routes:
+            route_steps = []
+            steps: dict = route["steps"]
+            for active_portal in map(Ingress.find_portal, steps):
+                if any(map(active_portal.is_contained_by_field, Ingress.flatten_iterable_of_tuples(all_steps+route_steps))): 
+                    print(f"WARNING: in route {routes.index(route)} portal {active_portal} {list(steps.keys()).index(active_portal.get_label())} is within a field when being linked from")
+                portals_to_link_to = tuple(map(Ingress.find_portal, steps[active_portal.get_label()]["links"]))
+                if len(portals_to_link_to) == 0: 
+                    route_steps.append((active_portal,))
+                    continue
+
+                route_steps.append(Ingress.simulate_step(active_portal, portals_to_link_to, all_steps+route_steps))
+
+            bounding_box = Ingress.bounding_box(Ingress.flatten_iterable_of_tuples(route_steps), grow_to_square=True)
+            all_steps.extend(route_steps)
+            output.append((bounding_box, route_steps))
+        
+        return tuple(output)
+        
     @staticmethod
     def draw_level(display_level: int, bounding_box: tuple[Portal, Portal], field_level: int = -1) -> tuple[Field]:
         if field_level < 0: field_level = display_level-1
@@ -513,10 +554,12 @@ class Ingress:
     @staticmethod
     def create_legend(fields: list[Field], onlyleaves: bool) -> list[Field]:
         tl, br = Ingress.bounding_box(fields)
+        tr, bl = (Portal("top right", tl.lat, br.lng), Portal("bottom left", br.lat, tl.lng))
+
         min_field_level = min(map(Field.get_level, fields))
         max_field_level = max(map(Field.get_level, fields))
 
-        # TODO: define start and end differently based on options (default is left side)
+        # TODO: declare start and end differently based on where to put legend and what order
         # delta_longitude = abs(tl.lng - br.lng)
         delta_latitude = abs(br.lat - tl.lat)
         segment_length = delta_latitude/(max_field_level+1-min_field_level)
@@ -524,8 +567,8 @@ class Ingress:
         output = []
         for level in range(min_field_level, max_field_level+1):
             offset = segment_length * (level - min_field_level)
-            item_tl = Portal(f"legend item's top left", tl.lat-offset, tl.lng-segment_length-PADDING)
-            item_br = Portal(f"legend item's bottom right", tl.lat-offset-segment_length, tl.lng-PADDING)
+            item_tl = Portal(f"legend item's top left", bl.lat+offset+segment_length, bl.lng-(segment_length*1.87)-PADDING)
+            item_br = Portal(f"legend item's bottom right", bl.lat+offset, bl.lng-PADDING)
             output.append(Ingress.draw_level(level+1, (item_tl, item_br)))
 
             if not onlyleaves:
@@ -535,7 +578,8 @@ class Ingress:
         return Ingress.flatten_iterable_of_tuples(output)
     
     @staticmethod
-    def bounding_box(objects: list[Portal|Link|Field], grow_to_square: bool = True) -> tuple[Portal, Portal]:
+    def bounding_box(objects: list[Portal|Link|Field], grow_to_square: bool = False) -> tuple[Portal, Portal]:
+        # TODO: add some debuging squares or something to see how it's growing to square in different situations
         portals = tuple(filter(lambda o: isinstance(o, Portal), objects))
         links = tuple(filter(lambda o: isinstance(o, Link), objects))
         fields = tuple(filter(lambda o: isinstance(o, Field), objects))
@@ -548,21 +592,31 @@ class Ingress:
         br = Portal("bottom right", lat = min(all_latitudes), lng = max(all_longitudes))
 
         if grow_to_square:
-            delta_longitude = abs(tl.lng - br.lng)
             delta_latitude = abs(br.lat - tl.lat)
-            if delta_latitude > delta_longitude:
-                difference = delta_latitude - delta_longitude
+            delta_longitude = abs(tl.lng - br.lng)
+            lat_against_lng = delta_latitude/delta_longitude
+            if lat_against_lng > 1/1.88:
+                # lng too smol
+                difference = delta_latitude * 1.88 - delta_longitude
                 # print(f"bounding box isn't square, latitude bigger by {difference} correcting")
-                tl.lng - difference/2
-                br.lng + difference/2
-            elif delta_longitude > delta_latitude:
-                difference = delta_longitude - delta_latitude
+                tl.lng = tl.lng - difference/2
+                br.lng = br.lng + difference/2
+            elif lat_against_lng < 1/1.88:
+                # lat too smol
+                difference = delta_longitude/1.88 - delta_latitude
                 # print(f"bounding box isn't square, longitude bigger by {difference} correcting")
-                tl.lat + difference/2
-                br.lat - difference/2
+                tl.lat = tl.lat + difference/2
+                br.lat = br.lat - difference/2
             else:
                 # deltas identical, box is a square, no action reqired
                 pass
+
+            # delta_latitude = abs(br.lat - tl.lat)
+            # delta_longitude = abs(tl.lng - br.lng)
+
+            # difference = delta_latitude*1.88 - delta_longitude
+            # tl.lng = tl.lng - difference/2
+            # br.lng = br.lng + difference/2
 
         return (tl, br)
     
@@ -649,6 +703,7 @@ class Ingress:
         for polygon in polygons:
             base_fields.append(Field.from_IITC_polygon(polygon))
 
+        # TODO: still relies on correct definition order
         for marker, polyline in zip(markers, polylines):
             routes.append(Portal.from_IITC_marker_polyline(marker, polyline))
 
@@ -660,6 +715,7 @@ class Ingress:
     def render(objects: tuple[Portal|Link|Field], color_map_function: Callable, output: list = None) -> list[dict]:
         if output == None: output = []
         if len(objects) == 0: return []
+        
         portals = tuple(filter(lambda o: isinstance(o, Portal), objects))
         links = tuple(filter(lambda o: isinstance(o, Link), objects))
         fields = tuple(filter(lambda o: isinstance(o, Field), objects))
@@ -669,13 +725,12 @@ class Ingress:
         # TODO: or maybe for object in objects and isinstance the type?
         # TODO: or maybe Link and Field inherits from parent with get_level, get_IITC_type and get_portals 
 
-        for field in fields:
-            mapped_level = my_translate(field.get_level(), 0, max_level + 1, 0, 1)
+        for portal in portals:
             output.append({
-                "type": "polygon",
-                "latLngs": [{"lat": portal.lat, "lng": portal.lng} for portal in field.portals],
-                "color": "#{:02x}{:02x}{:02x}".format(*[int(my_translate(v, 0,1, 0,255)) for v in color_map_function(mapped_level)])
-            })
+                "type": "marker",
+                "latLng": {"lat": portal.lat, "lng": portal.lng},
+                "color": "#{:02x}{:02x}{:02x}".format(*[int(my_translate(v, 0,1, 0,255)) for v in color_map_function(portal.get_score())])
+                })
         for link in links:
             mapped_level = my_translate(link.get_level(), 0, max_level + 1, 0, 1)
             output.append({
@@ -689,6 +744,13 @@ class Ingress:
                 "latLng": {"lat": portal.lat, "lng": portal.lng},
                 "color": "#{:02x}{:02x}{:02x}".format(*[int(my_translate(v, 0,1, 0,255)) for v in color_map_function(mapped_level)])
                 })    
+        for field in fields:
+            mapped_level = my_translate(field.get_level(), 0, max_level + 1, 0, 1)
+            output.append({
+                "type": "polygon",
+                "latLngs": [{"lat": portal.lat, "lng": portal.lng} for portal in field.portals],
+                "color": "#{:02x}{:02x}{:02x}".format(*[int(my_translate(v, 0,1, 0,255)) for v in color_map_function(mapped_level)])
+            })
         
         return output
 
@@ -755,11 +817,13 @@ class Ingress:
                 "routes": plan_routes}
         return plan
 
-    @classmethod
-    def add_from_bkmrk(cls, bkmrk: dict) -> None:
+    @staticmethod
+    def add_from_bkmrk_file(bkmrk_file_path: str) -> None:
+        with open(bkmrk_file_path, "r", encoding='utf-8') as f:
+            bkmrk = json.load(f)['portals']['idOthers']['bkmrk']
         for id in bkmrk:
             portal = Portal(bkmrk[id]["label"], *Ingress.parse_lat_comma_lng(bkmrk[id]["latlng"]))
-            cls.used_portals.append(portal)
+            Ingress.used_portals.append(portal)
     
 def help(first_time = False):
     if first_time:
@@ -786,6 +850,7 @@ def help(first_time = False):
 def main(opts: list[tuple[str, str]], args):
     # defaults
     make_plan = True
+    make_simulation = True
     make_legend = True
     split_method = Ingress.split_methods["hybrid"]
     onlyleaves = False
@@ -797,13 +862,11 @@ def main(opts: list[tuple[str, str]], args):
             help()
             sys.exit(2)
         elif o == "-a":
-            for portal_group in Ingress.portal_group_map:
-                with open(Ingress.portal_group_map[portal_group], "r", encoding='utf-8') as f:
-                    Ingress.add_from_bkmrk(json.load(f)['portals']['idOthers']['bkmrk'])
+            for portal_group_file_path in Ingress.portal_group_map.values():
+                Ingress.add_from_bkmrk_file(portal_group_file_path)
         elif o == "-p":
             for portal_group in a.split(","):
-                with open(Ingress.portal_group_map[portal_group.strip()], "r", encoding='utf-8') as f:
-                    Ingress.add_from_bkmrk(json.load(f)['portals']['idOthers']['bkmrk'])
+                Ingress.add_from_bkmrk_file(Ingress.portal_group_map[portal_group.strip()])
         elif o == "-c":
             if (color_map := Ingress.color_maps.get(a)) == None:
                 print(f"ERROR: color map {a} not recognised, your options are {Ingress.color_maps.keys()}")
@@ -818,6 +881,8 @@ def main(opts: list[tuple[str, str]], args):
             onlyleaves = True
         elif o == "--noplan":
             make_plan = False
+        elif o == "--nosim":
+            make_simulation = False
         elif o == "--nolegend":
             make_legend = False
         else:
@@ -832,14 +897,14 @@ def main(opts: list[tuple[str, str]], args):
         help(first_time = True)
         return
     except json.decoder.JSONDecodeError:
-        print("input.json is empty, make sure to copy/paste whatever IITC gives you into input.json")
+        print("input.json is empty, make sure to copy/paste whatever IITC gives you into input.json (and save it)")
         return
 
     # base_fields get split, routes get applied to them to make a plan, other just gets appended to output
     base_fields, routes, other = Ingress.parse_input(input)
 
     output = []
-    all_trees: list[Tree] = list(itertools.starmap(Tree, [(base_field, split_method) for base_field in base_fields]))
+    all_trees: tuple[Tree] = tuple(itertools.starmap(Tree, [(base_field, split_method) for base_field in base_fields]))
     all_fields = []
     for tree in all_trees:
         fields = tree.get_fields()
@@ -862,7 +927,9 @@ def main(opts: list[tuple[str, str]], args):
     if make_plan:
         plan = Ingress.create_plan(routes, all_trees)
         Ingress.output_to_json(plan, "./plan.json")
-    
+        if make_simulation:
+            Ingress.simulate_plan(plan)
+
 if __name__ == "__main__":
-    opts, args = getopt.getopt(sys.argv[1:], "hap:c:s:l", ["noplan", "nolegend"])
+    opts, args = getopt.getopt(sys.argv[1:], "hap:c:s:l", ["noplan", "nosim", "nolegend"])
     main(opts, args)

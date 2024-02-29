@@ -7,47 +7,11 @@ import os
 import imageio
 from main import Ingress, Portal, Link, Field
 
-def simulate_step(active_portal: Portal, portals_to_link_to: tuple[Portal], previous_steps: list[tuple[Portal|Link|Field]]) -> tuple[Link|Field]:
-    links = tuple(map(active_portal.create_link, portals_to_link_to))
-
-    output = []
-    for link in links:
-        touching_links = tuple(filter(link.is_touching, Ingress.flatten_iterable_of_tuples(previous_steps + output)))
-        fields = link.get_fields(touching_links)
-        output.append((link,) + fields)
-
-    return Ingress.flatten_iterable_of_tuples(output)
-
-def simulate_plan(plan: dict):
-    """returns [[(Portal, Portal), ([Portal], [Link], [Link, Link], ...)],
-                ((Portal, Portal), ([Portal], [Link], [Link, Link], ...))]"""
-
-    output = []
-    all_steps = []
-    routes = plan["routes"]
-    for route in routes:
-        route_steps = []
-        steps = route["steps"]
-        for active_portal in map(Ingress.find_portal, steps):
-            portals_to_link_to = tuple(map(Ingress.find_portal, steps[active_portal.get_label()]["links"]))
-            if len(portals_to_link_to) == 0: 
-                route_steps.append((active_portal,))
-                continue
-
-            route_steps.append(simulate_step(active_portal, portals_to_link_to, all_steps+route_steps))
-            
-
-        bounding_box = Ingress.bounding_box(Ingress.flatten_iterable_of_tuples(route_steps))
-        all_steps.extend(route_steps)
-        output.append((bounding_box, route_steps))
-    
-    return output
-
-def plot_portals(portals: Portal, color = "#ff6600"):
+def plot_portals(*portals: Portal, color = "#ff6600", zorder: int = 1):
     if all(map(lambda p: isinstance(p, Portal), portals)):
         longitudes = list(map(Portal.get_lng, portals))
         latitudes = list(map(Portal.get_lat, portals))
-        plt.plot(longitudes, latitudes, "o", color=color)
+        plt.scatter(longitudes, latitudes, s=10, c=color, zorder=zorder)
     else:
         assert False, f"plot_portals was given argument of type NOT Portal, portals: {portals}"
 
@@ -96,7 +60,7 @@ def plot_IITC_elements(input: list[dict]) -> None:
         elif IITC_element["type"] == "polygon":
             plt.fill(longitudes, latitudes, facecolor=IITC_element["color"], edgecolor=IITC_element["color"], linewidth=2, alpha=0.2)
         elif IITC_element["type"] == "marker":
-            plt.plot(IITC_element["latLng"]["lng"], IITC_element["latLng"]["lat"], "o", color=IITC_element["color"], zorder=3)
+            plot_portals(Ingress.find_portal_from_latLng(IITC_element["latLng"]), color=IITC_element["color"], zorder=3)
         else:
             print(f"WARNING: plot_IITC_elements attepting to plot IITC element of type {IITC_element['type']}")
 
@@ -105,23 +69,26 @@ def help():
 
 def main(opts, args):
     # defaults
-    only_links = False
     image_folder_path = "./gif_source"
+    simulation_slice = None
 
     for o, a in opts:
         if o == "-h":
             help()
             return
-        elif o == "-l":
-            only_links = True
+        elif o == "-s":
+            if len(a.split(",")) == 3:
+                route_index, from_step, to_step = map(int, a.split(","))
+                simulation_slice = (route_index, from_step, to_step)
+            else: 
+                print("ERROR: -s option expects comma separated list of 3 integers: route_index,from_step,to_step")
+                return
         elif o == "-a":
-            for portal_group in Ingress.portal_group_map:
-                with open(Ingress.portal_group_map[portal_group], "r", encoding='utf-8') as f:
-                    Ingress.add_from_bkmrk(json.load(f)['portals']['idOthers']['bkmrk'])
+            for portal_group_file_path in Ingress.portal_group_map.values():
+                Ingress.add_from_bkmrk_file(portal_group_file_path)
         elif o == "-p":
             for portal_group in a.split(","):
-                with open(Ingress.portal_group_map[portal_group.strip()], "r", encoding='utf-8') as f:
-                    Ingress.add_from_bkmrk(json.load(f)['portals']['idOthers']['bkmrk'])
+                Ingress.add_from_bkmrk_file(Ingress.portal_group_map[portal_group.strip()])
 
     assert Ingress.used_portals, f"no portals selected to split with, make sure you are using -p"
 
@@ -134,8 +101,13 @@ def main(opts, args):
         print(f"{path} not found")
         return
     
-    # TODO: there are no fields in the simulation
-    simulation = simulate_plan(plan)
+    simulation = Ingress.simulate_plan(plan)
+    if simulation_slice:
+        route_index, from_step, to_step = simulation_slice
+        sliced_steps = simulation[route_index][1][from_step:to_step]
+        portals = map(Ingress.find_portal, list(plan["routes"][route_index]["steps"].keys())[from_step:to_step])
+        simulation = (tuple([Ingress.bounding_box(portals, grow_to_square=True), sliced_steps]), )
+
     create_directory(image_folder_path)
     
     previous_route_steps = []
@@ -144,12 +116,12 @@ def main(opts, args):
         step_nr = 0
         for active_step, leading_steps in zip(steps, itertools.accumulate(steps)):
             clear_and_setup_plot(bounding_box)
-            plot_portals(Ingress.used_portals)
+            plot_portals(*Ingress.used_portals)
             rendered_leading_steps = Ingress.render(tuple(previous_route_steps) + leading_steps, lambda _: (0, 1, 0))
             rendered_active_step = Ingress.render(active_step, lambda _: (0, 0, 1))
             plot_IITC_elements(rendered_leading_steps)
             plot_IITC_elements(rendered_active_step)
-            plt.savefig(f"{image_folder_path}/{route_nr}-{step_nr}.png")
+            plt.savefig(f"{image_folder_path}/{route_nr}-{step_nr}.png", dpi=150)
             step_nr += 1
         previous_route_steps.extend(Ingress.flatten_iterable_of_tuples(steps))
         route_nr += 1
@@ -157,5 +129,5 @@ def main(opts, args):
     create_gif(image_folder_path, f"{image_folder_path}/_gif.gif", )
 
 if __name__ == "__main__":
-    opts, args = getopt.getopt(sys.argv[1:], "hlap:", [])
+    opts, args = getopt.getopt(sys.argv[1:], "hs:ap:", [])
     main(opts, args)
