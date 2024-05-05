@@ -347,7 +347,7 @@ class Field:
             return min(best_portals, key = Portal.get_score)
         else:
             return min(potential_split_portals, key = Portal.get_score)
-    
+
     def spiderweb(self) -> Portal:
         """return the portal that's nearest to any of self.portals"""
         potential_split_portals = self.get_portals()
@@ -357,7 +357,7 @@ class Field:
         return min(potential_split_portals, key = Portal.get_score)
     
     def hybrid(self) -> Portal:
-        zelda_fields = self.get_zelda_fields(subdivisions = 3)
+        zelda_fields = self.get_zelda_fields(subdivisions = 6)
         if any(map(Field.get_portals, zelda_fields)):
             return self.spiderweb()
         else:
@@ -542,11 +542,11 @@ class Ingress:
                     field_level))
             elif digit == "8":
                 output.append(Field.from_route(
-                    tuple(map(portal_grid.get, ((1,0),(0,1),(1,2),(2,1),(0,1),(0,2),(1,2),(1,3),(2,4),(3,4),(4,3),(4,2),(3,1),(2,2),(2,3),(3,3),(4,2),(4,1),(3,0),(2,1),))),
+                    tuple(map(portal_grid.get, ((1,0),(0,1),(1,2),(2,1),(0,1),(0,2),(1,2),(1,3),(2,4),(3,4),(4,3),(4,2),(3,1),(2,2),(2,3),(3,3),(4,2),(4,1),(3,0),(2,1)))),
                     field_level))
             elif digit == "9":
                 output.append(Field.from_route(
-                    tuple(map(portal_grid.get, ((1,0),(0,1),(0,3),(1,4),(3,4),(4,3),(4,1),(3,0),(2,0),(4,2),(3,3),(1,3),(1,1),(0,2),(1,3),(2,1),))),
+                    tuple(map(portal_grid.get, ((1,0),(0,1),(0,3),(1,4),(3,4),(4,3),(4,1),(3,0),(2,0),(4,2),(3,3),(1,3),(1,1),(0,2),(1,3),(2,1)))),
                     field_level))
         # TODO: in the future have from_route return a tuple of fields that are all triangles (super dynamic styles) but I'll keep this for now because it looks good
         return tuple(output)
@@ -578,7 +578,7 @@ class Ingress:
         return Ingress.flatten_iterable_of_tuples(output)
     
     @staticmethod
-    def bounding_box(objects: list[Portal|Link|Field], grow_to_square: bool = False) -> tuple[Portal, Portal]:
+    def bounding_box(objects: list[Portal|Link|Field], grow_to_square: bool = False, padding: bool = False) -> tuple[Portal, Portal]:
         # TODO: add some debuging squares or something to see how it's growing to square in different situations
         portals = tuple(filter(lambda o: isinstance(o, Portal), objects))
         links = tuple(filter(lambda o: isinstance(o, Link), objects))
@@ -599,25 +599,29 @@ class Ingress:
                 # lng too smol
                 difference = delta_latitude * 1.88 - delta_longitude
                 # print(f"bounding box isn't square, latitude bigger by {difference} correcting")
-                tl.lng = tl.lng - difference/2
-                br.lng = br.lng + difference/2
+                tl.lng -= difference/2
+                br.lng += difference/2
             elif lat_against_lng < 1/1.88:
                 # lat too smol
                 difference = delta_longitude/1.88 - delta_latitude
                 # print(f"bounding box isn't square, longitude bigger by {difference} correcting")
-                tl.lat = tl.lat + difference/2
-                br.lat = br.lat - difference/2
+                tl.lat += difference/2
+                br.lat -= difference/2
             else:
                 # deltas identical, box is a square, no action reqired
                 pass
 
-            # delta_latitude = abs(br.lat - tl.lat)
-            # delta_longitude = abs(tl.lng - br.lng)
+        if padding:
+            # add 5% padding on all sides
+            delta_latitude = abs(br.lat - tl.lat)
+            delta_longitude = abs(tl.lng - br.lng)
 
-            # difference = delta_latitude*1.88 - delta_longitude
-            # tl.lng = tl.lng - difference/2
-            # br.lng = br.lng + difference/2
+            br.lat += delta_latitude * .05
+            tl.lat -= delta_latitude * .05
 
+            br.lng -= delta_longitude * .05
+            tl.lng += delta_longitude * .05
+            
         return (tl, br)
     
     @staticmethod
