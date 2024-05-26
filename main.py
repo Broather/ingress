@@ -1,5 +1,8 @@
 from typing import Iterable, Callable
 import json
+import math
+import numpy as np
+import operator
 import itertools
 import getopt, sys
 import pyperclip
@@ -70,7 +73,7 @@ class Portal:
             return other.is_in(self)
         return False
     
-    def get_links_other_portal(self, other: object):
+    def get_link_other_portal(self, other: object):
         """returns Portal"""
         if isinstance(other, Link) and self.is_contained_by_link(other):
             if other.portals.index(self) == 0:
@@ -339,7 +342,7 @@ class Field:
         if len(best_portals) > 1:
             for portal in best_portals:
                 # TODO: does this masterpiece need changin'? Let me know in the comments below
-                portal.score = Tree(self, lambda field: portal if field.get_level() == self.get_level() else field.homogen(), announce_self=False).get_weighted_variance()
+                portal.score = Tree(self, lambda field: portal if field.get_level() == self.get_level() else field.homogen(), announce_self=False).get_variance()
             if min(map(Portal.get_score, best_portals)) != max(map(Portal.get_score, best_portals)):
                 print("My efforts are not in vain!")
                 print(f"When splitting {self} found multiple best split portals: {best_portals}")
@@ -356,12 +359,15 @@ class Field:
         
         return min(potential_split_portals, key = Portal.get_score)
     
-    def hybrid(self) -> Portal:
-        zelda_fields = self.get_zelda_fields(subdivisions = 6)
-        if any(map(Field.get_portals, zelda_fields)):
-            return self.spiderweb()
-        else:
-            return self.homogen()
+    @staticmethod
+    def hybrid(subdivisions) -> Callable:
+        def foo(self: Field) -> Portal:
+            zelda_fields = self.get_zelda_fields(subdivisions = subdivisions)
+            if any(map(Field.get_portals, zelda_fields)):
+                return self.spiderweb()
+            else:
+                return self.homogen()
+        return foo
     
     def split(self, split_method: Callable) -> tuple:
         """returns tuple[Field]"""
@@ -380,7 +386,7 @@ class Tree:
         if announce_self: print(self)
     
     def __repr__(self) -> str:
-        return f"{self.root} variance {self.get_weighted_variance()} {self.get_MU()} MU {len(self.get_links())} links {len(self.get_fields())} fields"
+        return f"{self.root} mean lvl: {self.get_mean_level():.2f} stndrd deviation: {self.get_standard_deviation():.2f} links: {len(self.get_links())} fields: {len(self.get_fields())}"
 
     def get_fields(self, node: Field = None) -> tuple[Field]:
         """returns a tuple of all lower standing nodes (inclusive). Goes from root if node not given (made by GTP-3.5)"""
@@ -400,14 +406,34 @@ class Tree:
 
         return tuple(fields)
     
-    def get_weighted_variance(self) -> float:
-        leaves = tuple(filter(Field.is_leaf, self.get_fields()))
-        leaf_levels = tuple(map(Field.get_level, leaves))
-        leaf_weights = tuple(map(lambda l: l.get_area()/self.root.get_area(), leaves))
-        weighted_average_leaf_level = sum([w * lvl for lvl, w in zip(leaf_levels, leaf_weights)])/len(leaf_levels)
-        weighted_variance = sum([w * (lvl-weighted_average_leaf_level)**2 for lvl, w in zip(leaf_levels, leaf_weights)])/sum(leaf_weights)
+    def get_mean_level(self) -> float:
+        leaves = list(filter(Field.is_leaf, self.get_fields()))
+        leaf_areas = np.array(list(map(Field.get_area, leaves)))
+        normalized_leaf_areas = leaf_areas / self.root.get_area()
 
-        return weighted_variance 
+        assert 1-sum(normalized_leaf_areas) < .01, "the sum of normalized leaf areas is off by at least 1%"
+
+        leaf_levels = np.array(list(map(Field.get_level, leaves)))
+        # .1 of the entire area is 1 layer
+        # .23 of the entire area is 2 layers
+        # .52 of the entire area is 3 layers
+        # ...
+        # sum of multiplications
+        return sum(normalized_leaf_areas * leaf_levels)
+    
+    def get_variance(self) -> float:
+        leaves = tuple(filter(Field.is_leaf, self.get_fields()))
+        leaf_areas = np.array(list(map(Field.get_area, leaves)))
+        normalized_leaf_areas = leaf_areas / self.root.get_area()
+
+        assert 1-sum(normalized_leaf_areas) < .01, "the sum of normalized leaf areas is off by at least 1%"
+
+        leaf_levels = np.array(list(map(Field.get_level, leaves)))
+        
+        return sum(normalized_leaf_areas * (leaf_levels - self.get_mean_level())**2)
+    
+    def get_standard_deviation(self) -> float:
+        return math.sqrt(self.get_variance())
 
     def get_level_range(self) -> tuple[int, int]:
         """returns a tree's range of levels or it's thicc-ness"""
@@ -448,7 +474,7 @@ class Ingress:
     color_maps = {"rainbow" : lambda variable: hsv_to_rgb(variable, 1, 1),
                 "grayscale": lambda variable: hsv_to_rgb(1, 0, variable)}
     
-    split_methods = {"hybrid": Field.hybrid,
+    split_methods = {"hybrid": Field.hybrid(6),
                      "spiderweb": Field.spiderweb,
                      "homogen": Field.homogen}
 
@@ -466,19 +492,21 @@ class Ingress:
         return Ingress.flatten_iterable_of_tuples(output)
 
     @staticmethod
-    def simulate_plan(plan: dict) -> tuple[(tuple, tuple)]:
-        """returns [[bounding_box, route_steps],
-                    ((Portal, Portal), ([Portal], [Link], [Link, Link], ...))]"""
+    def simulate_plan(plan: dict, step_per_link: bool = False) -> tuple[(tuple, tuple)]:
+        """returns route: {bounding_box: tuple, steps: [[<Portal|Link|Field>]]}"""
 
-        output = []
-        all_steps = []
-        routes: list = plan["routes"]
-        for route in routes:
+        if step_per_link:
+            all_steps = []
+        else:
+            all_steps = []
+        output = {}
+        routes: dict = plan["routes"]
+        for route_title in routes:
             route_steps = []
-            steps: dict = route["steps"]
+            steps: dict = routes[route_title]["steps"]
             for active_portal in map(Ingress.find_portal, steps):
                 if any(map(active_portal.is_contained_by_field, Ingress.flatten_iterable_of_tuples(all_steps+route_steps))): 
-                    print(f"WARNING: in route {routes.index(route)} portal {active_portal} {list(steps.keys()).index(active_portal.get_label())} is within a field when being linked from")
+                    print(f"WARNING: in route {route_title} {list(routes.keys()).index(route_title)} portal {active_portal} {list(steps.keys()).index(active_portal.get_label())} is within a field when being linked from")
                 portals_to_link_to = tuple(map(Ingress.find_portal, steps[active_portal.get_label()]["links"]))
                 if len(portals_to_link_to) == 0: 
                     route_steps.append((active_portal,))
@@ -548,7 +576,6 @@ class Ingress:
                 output.append(Field.from_route(
                     tuple(map(portal_grid.get, ((1,0),(0,1),(0,3),(1,4),(3,4),(4,3),(4,1),(3,0),(2,0),(4,2),(3,3),(1,3),(1,1),(0,2),(1,3),(2,1)))),
                     field_level))
-        # TODO: in the future have from_route return a tuple of fields that are all triangles (super dynamic styles) but I'll keep this for now because it looks good
         return tuple(output)
     
     @staticmethod
@@ -773,7 +800,7 @@ class Ingress:
         if (missed_portals_count := len(all_portals) - len(route_portals)) > 0:
             print(f"WARNING: routes missed {missed_portals_count} portal/-s, plan/-s might not be accurate. Missing portals {all_portals.difference(route_portals)}")
 
-        plan_routes = []
+        plan_routes = {}
         visited_portals = set()
         created_links = set()
         for route in routes:
@@ -802,20 +829,19 @@ class Ingress:
                 steps[active_portal.get_label()] = {
                 "keys": len(connected_links)-len(outbound_links),
                 # TODO: this one's a bit rought aswell
-                "links": list(map(Portal.get_label, map(active_portal.get_links_other_portal, link_order)))
+                "links": list(map(Portal.get_label, map(active_portal.get_link_other_portal, link_order)))
                 }
 
             route_length = round(sum(itertools.starmap(Portal.distance, itertools.pairwise(route))), 2)
             total_keys_required = len(route_links)
 
-            plan_routes.append({
-                "title": f"{route[0]}...{route[-1]}",
+            plan_routes[f"{route[0]}...{route[-1]}"] = {
                 "SBULs_required": SBUL_count,
                 "route_length_(meters)": route_length,
                 "route_keys_required": total_keys_required,
                 "estimated_time_to_complete_(minutes)": round(route_length / AVERAGE_WALKING_SPEED + total_keys_required * COOLDOWN_BETWEEN_HACKS, 2),
                 "steps": steps
-                })
+                }
         
         plan = {"total-total_keys_required": len(all_links),
                 "routes": plan_routes}
@@ -865,12 +891,13 @@ def main(opts: list[tuple[str, str]], args):
         if o == "-h":
             help()
             sys.exit(2)
-        elif o == "-a":
-            for portal_group_file_path in Ingress.portal_group_map.values():
-                Ingress.add_from_bkmrk_file(portal_group_file_path)
         elif o == "-p":
-            for portal_group in a.split(","):
-                Ingress.add_from_bkmrk_file(Ingress.portal_group_map[portal_group.strip()])
+            if a.lower() == "all":
+                for file in Ingress.portal_group_map.values():
+                    Ingress.add_from_bkmrk_file(file)
+            else:
+                for portal_group in a.split(","):
+                    Ingress.add_from_bkmrk_file(Ingress.portal_group_map[portal_group.strip()])
         elif o == "-c":
             if (color_map := Ingress.color_maps.get(a)) == None:
                 print(f"ERROR: color map {a} not recognised, your options are {Ingress.color_maps.keys()}")
@@ -935,5 +962,5 @@ def main(opts: list[tuple[str, str]], args):
             Ingress.simulate_plan(plan)
 
 if __name__ == "__main__":
-    opts, args = getopt.getopt(sys.argv[1:], "hap:c:s:l", ["noplan", "nosim", "nolegend"])
+    opts, args = getopt.getopt(sys.argv[1:], "hp:c:s:l", ["noplan", "nosim", "nolegend"])
     main(opts, args)

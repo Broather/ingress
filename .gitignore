@@ -7,3 +7,4 @@ venv
 .vscode
 gif_source
 NOTES.md
+test.py
