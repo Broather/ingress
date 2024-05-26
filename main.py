@@ -862,19 +862,22 @@ def help(first_time = False):
         open("./input.json", "w").close()
         print("input.json created")
 
-        print("""
-        install IITC for your browser at http://iitc.me and go to http://www.intel.ingress.com.
-        more details on which IITC extentions to install hopefully in the README.md file\n\n""")
+        print("""Install IITC for your browser at http://iitc.me and go to http://www.intel.ingress.com
+        For more details on which IITC extentions to install refer to the README.md file\n\n""")
         
-    print("Syntax: python main.py [-hol] [-p comma_separated_list[<PV|...>]] [-c <rainbow|grayscale>]")
+    print("Syntax: python main.py [-hol] [-p comma_separated_list[<PV|...|ALL>]] [-c <rainbow|grayscale>]")
     print("""
     Options:
         h: calls this help function
         p: defines which portal groups to add to Ingress.used_portals (only way I could think of to get portal data here)
         a: adds all defined portal groups to Ingress.used_portals
-        c: selects the color map to use, default is rainbow for all layers
-        s: selects the split method to use, default is hybrid (mix between homogen and spiderweb)
+        c: selects the color map to use, (default: rainbow for all layers)
+        s: selects the split method to use, (default: hybrid6)
         l: display only the leaf fields, aka the top most layer of each section
+        --noplan: skip making a plan
+        --nosim: skip simulating created plan
+        --nolegend: skip including a legend in output.json
+        --input: spiecify path to IITC json file
     """)
 
 def main(opts: list[tuple[str, str]], args):
@@ -885,6 +888,7 @@ def main(opts: list[tuple[str, str]], args):
     split_method = Ingress.split_methods["hybrid"]
     onlyleaves = False
     color_map = Ingress.color_maps["rainbow"]
+    input_path = "./input.json"
     
     # option parsing
     for o, a in opts:
@@ -916,13 +920,15 @@ def main(opts: list[tuple[str, str]], args):
             make_simulation = False
         elif o == "--nolegend":
             make_legend = False
+        elif o == "--input":
+            input_path = a
         else:
             assert False, f"ERROR: unparsed option: {o}"
     
     assert Ingress.used_portals, f"no portals selected to split with, make sure you are using -p"
     print(f"{len(Ingress.used_portals)} portals in Ingress.used_portals")
     try:
-        with open('./input.json', 'r') as f:
+        with open(input_path, 'r') as f:
             input: list[dict] = json.load(f)
     except FileNotFoundError:
         help(first_time = True)

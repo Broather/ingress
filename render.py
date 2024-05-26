@@ -5,7 +5,7 @@ import json
 import matplotlib.pyplot as plt
 import os
 import imageio
-from main import Ingress, Portal, Link, Field
+from main import Ingress, Portal
 
 def plot_portals(*portals: Portal, color = "#ff6600", zorder: int = 1):
     if all(map(lambda p: isinstance(p, Portal), portals)):
@@ -56,6 +56,7 @@ def plot_IITC_elements(input: list[dict]) -> None:
             latitudes = list(map(lambda e: e["lat"], latLngs))
 
         if IITC_element["type"] == "polyline":
+            # default zorder is 2
             plt.plot(longitudes, latitudes, color=IITC_element["color"], zorder=1)
         elif IITC_element["type"] == "polygon":
             plt.fill(longitudes, latitudes, facecolor=IITC_element["color"], edgecolor=IITC_element["color"], linewidth=2, alpha=0.2)
@@ -65,12 +66,13 @@ def plot_IITC_elements(input: list[dict]) -> None:
             print(f"WARNING: plot_IITC_elements attepting to plot IITC element of type {IITC_element['type']}")
 
 def help():
-    print("syntax: render.py [-h] path/to/output.json")
+    print("syntax: render.py [-h] path/to/plan.json")
 
 def main(opts, args):
     # defaults
     image_folder_path = "./gif_source"
-    simulation_slice = None
+    section_data = None
+    plan_path = "./plan.json"
 
     for o, a in opts:
         if o == "-h":
@@ -79,7 +81,7 @@ def main(opts, args):
         elif o == "-s":
             if len(a.split(",")) == 3:
                 route_index, from_step, to_step = map(int, a.split(","))
-                simulation_slice = (route_index, from_step, to_step)
+                section_data = (route_index, from_step, to_step)
             else: 
                 print("ERROR: -s option expects comma separated list of 3 integers: route_index,from_step,to_step")
                 return
@@ -87,23 +89,29 @@ def main(opts, args):
             for portal_group_file_path in Ingress.portal_group_map.values():
                 Ingress.add_from_bkmrk_file(portal_group_file_path)
         elif o == "-p":
-            for portal_group in a.split(","):
-                Ingress.add_from_bkmrk_file(Ingress.portal_group_map[portal_group.strip()])
+            if a.lower() == "all":
+                for file in Ingress.portal_group_map.values():
+                    Ingress.add_from_bkmrk_file(file)
+            else:
+                for portal_group in a.split(","):
+                    Ingress.add_from_bkmrk_file(Ingress.portal_group_map[portal_group.strip()])
+        elif o == "--plan":
+            plan_path = a
+        else:
+            assert False, f"ERROR: unparsed option: {o}"
 
     assert Ingress.used_portals, f"no portals selected to split with, make sure you are using -p"
 
-    assert len(args) == 1, f"ERROR: only 1 positional argument allowed, {len(args)} detected"
-    path = args[0]
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(plan_path, "r", encoding="utf-8") as f:
             plan: list[dict] = json.load(f)
     except FileNotFoundError:
-        print(f"{path} not found")
+        print(f"{plan_path} not found")
         return
     
     simulation = Ingress.simulate_plan(plan)
-    if simulation_slice:
-        route_index, from_step, to_step = simulation_slice
+    if section_data:
+        route_index, from_step, to_step = section_data
         sliced_steps = simulation[route_index][1][from_step:to_step]
         portals = map(Ingress.find_portal, list(plan["routes"][route_index]["steps"].keys())[from_step:to_step])
         simulation = (tuple([Ingress.bounding_box(portals, grow_to_square=True), sliced_steps]), )
@@ -117,10 +125,10 @@ def main(opts, args):
         for active_step, leading_steps in zip(steps, itertools.accumulate(steps)):
             clear_and_setup_plot(bounding_box)
             plot_portals(*Ingress.used_portals)
-            rendered_leading_steps = Ingress.render(tuple(previous_route_steps) + leading_steps, lambda _: (0, 1, 0))
-            rendered_active_step = Ingress.render(active_step, lambda _: (0, 0, 1))
-            plot_IITC_elements(rendered_leading_steps)
-            plot_IITC_elements(rendered_active_step)
+            leading_steps = Ingress.render(tuple(previous_route_steps) + leading_steps, Ingress.color_maps["rainbow"])
+            active_step = Ingress.render(active_step, Ingress.color_maps["rainbow"])
+            plot_IITC_elements(leading_steps)
+            plot_IITC_elements(active_step)
             plt.savefig(f"{image_folder_path}/{route_nr}-{step_nr}.png", dpi=150)
             step_nr += 1
         previous_route_steps.extend(Ingress.flatten_iterable_of_tuples(steps))

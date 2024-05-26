@@ -16,7 +16,7 @@ python -m venv venv
 ```
 .\venv\Scripts\activate
 ```
-### install requirements (just pyperclip for now)
+### install requirements
 ```
 python -m pip install -r requirements.txt
 ```
