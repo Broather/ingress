@@ -158,7 +158,7 @@ class Link:
     def get_level(self):
         return self.level
 
-    def get_rezulting_fields(self, context: Iterable):
+    def get_resulting_fields(self, context: Iterable):
         """returns a touple of 0 or 1 or 2 fields that would be created when adding self to the web of links (others)"""
         links = list(filter(Link.__instancecheck__, context))
         touching_links = list(filter(self.is_touching, links))
@@ -823,7 +823,7 @@ class Ingress:
         return plan
 
     @staticmethod
-    def simulate_plan(plan: dict, chunk_steps: bool = False) -> dict:
+    def simulate_plan(plan: dict, chunk_together: bool = False) -> dict:
         """returns route: {bounding_box: BoundingBox, steps: [[<Portal|Link|Field>]]}"""
         output = {}
         context = []
@@ -837,10 +837,10 @@ class Ingress:
                 links = map(active_portal.create_link, portals_to_link_to)
 
                 for link in links:
-                    portal_steps.append((link, *link.get_rezulting_fields(context))) 
+                    portal_steps.append((link, *link.get_resulting_fields(context))) 
                     context.append(link)
 
-                if chunk_steps: portal_steps = (Ingress.flatten_iterable_of_tuples(portal_steps), )
+                if chunk_together: portal_steps = (Ingress.flatten_iterable_of_tuples(portal_steps), )
                 route_steps.extend(portal_steps)
 
             bb = BoundingBox(Ingress.flatten_iterable_of_tuples(route_steps), grow_to_square=True, padding=True)
