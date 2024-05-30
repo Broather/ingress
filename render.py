@@ -5,7 +5,7 @@ import json
 import matplotlib.pyplot as plt
 import os
 import imageio
-from main import Ingress, Portal
+from ingress import Ingress, Portal, BoundingBox
 
 def plot_portals(*portals: Portal, color = "#ff6600", zorder: int = 1):
     if all(map(lambda p: isinstance(p, Portal), portals)):
@@ -13,12 +13,12 @@ def plot_portals(*portals: Portal, color = "#ff6600", zorder: int = 1):
         latitudes = list(map(Portal.get_lat, portals))
         plt.scatter(longitudes, latitudes, s=10, c=color, zorder=zorder)
     else:
-        assert False, f"plot_portals was given argument of type NOT Portal, portals: {portals}"
+        assert False, f"plot_portals was given argument of type NOT Portal: {portals}"
 
 def create_gif(images_folder: str, output_gif_path: str, fps: int = 5):
     """creates a gif from a directory of .png images (made by GPT-3.5 modified by me)"""
     images = []
-    
+
     # sorted_file_names = sorted(filter(lambda f_name: f_name.endswith(".png"), os.listdir(image_folder_path)), key=lambda f_name: tuple(map(int, f_name.removesuffix(".png").split("-"))))
     sorted_png_file_names = sorted(filter(lambda f_name: f_name.endswith(".png"), os.listdir(images_folder)), key=lambda f_name: tuple(map(int, f_name.removesuffix(".png").split("-"))))
     # Read all PNG images in the folder
@@ -28,16 +28,17 @@ def create_gif(images_folder: str, output_gif_path: str, fps: int = 5):
 
     # Create GIF
     imageio.mimwrite(output_gif_path, images, fps=fps, loop=0)
-    
-def clear_and_setup_plot(bounding_box: tuple[Portal, Portal]) -> None:
+
+def set_plot_bounds(bb: BoundingBox) -> None:
+    plt.xlim((bb.tl.lng, bb.br.lng))
+    plt.ylim((bb.br.lat, bb.tl.lat))
+
+def clear_and_setup_plot() -> None:
     plt.close()
 
     # and set it back up
     plt.figure(facecolor='#262626')
     plt.axis("off")
-    tl, br = bounding_box
-    plt.xlim((tl.lng, br.lng))
-    plt.ylim((br.lat, tl.lat))
 
 def create_directory(dir_path: str) -> None:
     exists = os.path.exists(dir_path)
@@ -66,28 +67,20 @@ def plot_IITC_elements(input: list[dict]) -> None:
             print(f"WARNING: plot_IITC_elements attepting to plot IITC element of type {IITC_element['type']}")
 
 def help():
-    print("syntax: render.py [-h] path/to/plan.json")
+    print("syntax: render.py [-hc] [-p comma] path/to/plan.json")
 
 def main(opts, args):
     # defaults
     image_folder_path = "./gif_source"
-    section_data = None
+    chunk_steps = False
     plan_path = "./plan.json"
 
     for o, a in opts:
         if o == "-h":
             help()
             return
-        elif o == "-s":
-            if len(a.split(",")) == 3:
-                route_index, from_step, to_step = map(int, a.split(","))
-                section_data = (route_index, from_step, to_step)
-            else: 
-                print("ERROR: -s option expects comma separated list of 3 integers: route_index,from_step,to_step")
-                return
-        elif o == "-a":
-            for portal_group_file_path in Ingress.portal_group_map.values():
-                Ingress.add_from_bkmrk_file(portal_group_file_path)
+        elif o == "-c":
+            chunk_steps = True
         elif o == "-p":
             if a.lower() == "all":
                 for file in Ingress.portal_group_map.values():
@@ -98,7 +91,7 @@ def main(opts, args):
         elif o == "--plan":
             plan_path = a
         else:
-            assert False, f"ERROR: unparsed option: {o}"
+            assert False, f"ERROR: unhandled option: {o}"
 
     assert Ingress.used_portals, f"no portals selected to split with, make sure you are using -p"
 
@@ -108,34 +101,26 @@ def main(opts, args):
     except FileNotFoundError:
         print(f"{plan_path} not found")
         return
-    
-    simulation = Ingress.simulate_plan(plan)
-    if section_data:
-        route_index, from_step, to_step = section_data
-        sliced_steps = simulation[route_index][1][from_step:to_step]
-        portals = map(Ingress.find_portal, list(plan["routes"][route_index]["steps"].keys())[from_step:to_step])
-        simulation = (tuple([Ingress.bounding_box(portals, grow_to_square=True), sliced_steps]), )
 
     create_directory(image_folder_path)
-    
-    previous_route_steps = []
+
+    simulation = Ingress.simulate_plan(plan, chunk_steps=chunk_steps)
     route_nr = 0
-    for bounding_box, steps in simulation:
+    for route in simulation:
+        clear_and_setup_plot()
+        bb: BoundingBox = simulation[route]["bounding_box"]
+        set_plot_bounds(bb)
+        plot_portals(*filter(bb.is_in, Ingress.used_portals))
         step_nr = 0
-        for active_step, leading_steps in zip(steps, itertools.accumulate(steps)):
-            clear_and_setup_plot(bounding_box)
-            plot_portals(*Ingress.used_portals)
-            leading_steps = Ingress.render(tuple(previous_route_steps) + leading_steps, Ingress.color_maps["rainbow"])
-            active_step = Ingress.render(active_step, Ingress.color_maps["rainbow"])
-            plot_IITC_elements(leading_steps)
+        for active_step in simulation[route]["steps"]:
+            active_step = Ingress.render(active_step, Ingress.color_maps["green"])
             plot_IITC_elements(active_step)
             plt.savefig(f"{image_folder_path}/{route_nr}-{step_nr}.png", dpi=150)
             step_nr += 1
-        previous_route_steps.extend(Ingress.flatten_iterable_of_tuples(steps))
         route_nr += 1
 
     create_gif(image_folder_path, f"{image_folder_path}/_gif.gif", )
 
 if __name__ == "__main__":
-    opts, args = getopt.getopt(sys.argv[1:], "hs:ap:", [])
+    opts, args = getopt.getopt(sys.argv[1:], "hcp:", ["plan="])
     main(opts, args)
