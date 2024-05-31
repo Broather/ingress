@@ -3,7 +3,7 @@ import json
 import getopt, sys
 from ingress import Ingress, Field, Tree
 
-def help(first_time = False):
+def assistance(first_time = False):
     if first_time:
         print("Looks like it's your first time launching main.py")
 
@@ -42,7 +42,7 @@ def main(options: list[tuple[str, str]]):
     # option parsing
     for o, a in options:
         if o == "-h":
-            help()
+            assistance()
             sys.exit(2)
         elif o == "-p":
             if a.lower() == "all":
@@ -54,7 +54,7 @@ def main(options: list[tuple[str, str]]):
         elif o == "-c":
             if (color_map := Ingress.color_maps.get(a)) is None:
                 print(f"ERROR: color map {a} not recognised, your options are {Ingress.color_maps.keys()}")
-                help()
+                assistance()
                 sys.exit(2)
         elif o == "-s":
             split_method = Ingress.parse_split_method(a.strip())
@@ -75,16 +75,8 @@ def main(options: list[tuple[str, str]]):
 
     assert Ingress.used_portals, "no portals selected to split with, make sure you are using -p"
     print(f"{len(Ingress.used_portals)} portals in Ingress.used_portals")
-    try:
-        with open(input_path, 'r', encoding='utf-8') as f:
-            input: list[dict] = json.load(f)
-    except FileNotFoundError:
-        help(first_time = True)
-        return
-    except json.decoder.JSONDecodeError:
-        print("input.json is empty, make sure to copy/paste whatever IITC gives you into input.json (and save it)")
-        return
 
+    input = Ingress.read_json(input_path, assistance)
     # base_fields get split, routes get applied to them to make a plan, other just gets appended to output
     base_fields, routes, other = Ingress.parse_input(input)
     # create a uniform split_profile if not defined

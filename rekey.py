@@ -3,7 +3,7 @@ import getopt
 import json
 from main import Ingress
 
-def help():
+def assistance():
     print("Syntax: python rekey.py [-h] path/to/plan.json")
     print("""takes the plan.json created by main.py and saves rekey.json with the correct amount of keys reqired from each portal
 
