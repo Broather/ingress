@@ -77,6 +77,8 @@ def main(options: list[tuple[str, str]]):
     print(f"{len(Ingress.used_portals)} portals in Ingress.used_portals")
 
     input = Ingress.read_json(input_path, assistance)
+    if input is None: return
+    
     # base_fields get split, routes get applied to them to make a plan, other just gets appended to output
     base_fields, routes, other = Ingress.parse_input(input)
     # create a uniform split_profile if not defined

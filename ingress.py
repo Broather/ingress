@@ -66,7 +66,10 @@ class Portal:
             return self in other.portals
         return False
 
-    def is_within_field(self, other: object) -> bool:
+    def is_under_field(self, other: object) -> bool:
+        """return True if self is under other: Field.
+
+        Portals that make up the Field are conidered OUTSIDE the Field"""
         if isinstance(other, Field):
             return other.is_in(self)
         return False
@@ -314,7 +317,7 @@ class Field:
         return len(self.get_portals()) > 0
 
     def is_in(self, portal: Portal) -> bool:
-        """Check if a Portal is inside the Field on Earth's surface. (made by GPT-3.5)"""
+        """Check if a Portal is under Field (self) (made by GPT-3.5)"""
         def sign(p1: Portal, p2: Portal, p3: Portal):
             return (p1.lat - p3.lat) * (p2.lng - p3.lng) - (p2.lat - p3.lat) * (p1.lng - p3.lng)
 
@@ -453,12 +456,15 @@ class Tree:
         if announce_self: print(self)
 
     def __repr__(self) -> str:
-        return " ".join([f"{self.root}",
-                        f"mean lvl: {self.get_mean_level():.2f}",
-                        f"stndrd deviation: {self.get_standard_deviation():.2f}", 
-                        f"links: {len(self.get_links())}", 
-                        f"fields: {len(self.get_fields())}"
-                        ])
+        data = {"mind_units": self.get_MU(),
+                "average_level": self.get_mean_level(),
+                "standard_deviation": self.get_standard_deviation(),
+                "amount_of_links": len(self.get_links()),
+                "amount_of_fields": len(self.get_fields()),
+                "base_field": self.root}
+        
+        return "MU: %6d mean lvl: %5.2f stndrd deev: %4.2f links: %3d fields: %3d (%r)" % tuple(data.values())
+
     def get_fields(self, node: Field = None) -> tuple[Field]:
         """return node and all lower standing nodes, uses root if node not given (made by GTP-3.5).
 
@@ -540,6 +546,7 @@ class Ingress:
         "gd": "./portals/gudenieki.json",
         "jk": "./portals/jurkalne.json",
         "vp": "./portals/ventspils.json",
+        "uz": "./portals/uzava.json",
         }
 
     used_portals: list[Portal] = []
@@ -769,18 +776,18 @@ class Ingress:
 
     @staticmethod
     def create_plan(routes: list[tuple[Portal]], trees: list[Tree]) -> dict:
-        AVERAGE_WALKING_SPEED = 84 # meters/minute
+        # TODO: big rework incoming for when portals can be visited multiple times
+        AVERAGE_WALKING_SPEED = 84 # meters per minute
         COOLDOWN_BETWEEN_HACKS = 5 # minutes
 
         all_fields: tuple[Field] = Ingress.flatten_iterable_of_tuples(map(Tree.get_fields, trees))
         all_links: set[Link] = set(Ingress.flatten_iterable_of_tuples(map(Tree.get_links, trees)))
-
         all_portals = set(Ingress.flatten_iterable_of_tuples(map(Field.get_portals_inclusive, all_fields)))
-        route_portals = set(Ingress.flatten_iterable_of_tuples(routes))
 
+        route_portals = set(Ingress.flatten_iterable_of_tuples(routes))
         # warn if there are any portals missed by routes
-        if (missed_portals_count := len(all_portals) - len(route_portals)) > 0:
-            print(f"WARNING: routes missed {missed_portals_count} portal/-s, plan/-s might not be accurate. Missing portals {all_portals.difference(route_portals)}")
+        if (missed_portal_count := len(all_portals) - len(route_portals)) > 0:
+            print(f"WARNING: routes missed {missed_portal_count} portal/-s, plan/-s might not be accurate. Missing portals {all_portals.difference(route_portals)}")
 
         plan_routes = {}
         visited_portals = set()
@@ -798,10 +805,8 @@ class Ingress:
                 route_links.update(outbound_links)
                 created_links.update(outbound_links)
 
-                SBUL_count += len(outbound_links) // 9
-                if len(outbound_links) > 24:
-                    print(f"WARNING: at portal {active_portal.get_label()} outbound link count exceeds 2 SBULs: {len(outbound_links)}")
-
+                SBUL_count += 0 if len(outbound_links) == 0 else (len(outbound_links) - 1) // 8
+                
                 # TODO: we're double nested over here, I'm sure there's a way to overcome this
                 # primary sort criteria: filter all the fields that the link is part of and get their levels and pick the min level
                 # secondary sort criteria: longest link first
@@ -814,20 +819,25 @@ class Ingress:
                 "links": list(map(Portal.get_label, map(active_portal.get_adjacent_portal, link_order)))
                 }
 
+            key_count = len(route_links)
             route_length = round(sum(starmap(Portal.distance, pairwise(route))), 2)
-            total_keys_required = len(route_links)
-            time_to_complete = route_length / AVERAGE_WALKING_SPEED + total_keys_required * COOLDOWN_BETWEEN_HACKS
+            time_to_complete = route_length / AVERAGE_WALKING_SPEED + key_count * COOLDOWN_BETWEEN_HACKS
 
             plan_routes[f"{route[0]}...{route[-1]}"] = {
+                "keys_required": key_count,
                 "SBULs_required": SBUL_count,
                 "route_length_(meters)": route_length,
-                "route_keys_required": total_keys_required,
                 "estimated_time_to_complete_(minutes)": round(time_to_complete, 2),
+                "estimated_time_to_complete_(hours)": round(time_to_complete/60, 2),
                 "steps": steps
                 }
 
-        plan = {"total-total_keys_required": len(all_links),
-                "routes": plan_routes}
+        plan = {
+            "portals_involved": len(visited_portals),
+            "total_keys_required": sum(map(lambda k: plan_routes[k]["keys_required"], plan_routes)),
+            "total_SBULs_required": sum(map(lambda k: plan_routes[k]["SBULs_required"], plan_routes)),
+            "routes": plan_routes
+            }
         return plan
 
     @staticmethod
@@ -840,7 +850,7 @@ class Ingress:
             plan_steps: dict = routes[route_title]["steps"]
             route_steps = []
             for active_portal in map(Ingress.find_portal, plan_steps):
-                active_portal.value = plan_steps[active_portal.get_label()]["keys"]
+                active_portal.value = len(plan_steps[active_portal.get_label()]["links"])
                 portal_steps = [(active_portal, )]
                 portals_to_link_to = tuple(map(Ingress.find_portal, plan_steps[active_portal.get_label()]["links"]))
                 links = map(active_portal.create_link, portals_to_link_to)
@@ -856,6 +866,39 @@ class Ingress:
             output[route_title] = {"bounding_box": bb, "steps": route_steps}
 
         return output
+    
+    @staticmethod
+    def validate_simulation(simulation: dict):
+        # {bounding_box: BoundingBox, steps: [[<Portal|Link|Field>]]}
+        all_steps = map(lambda r: simulation[r]["steps"], simulation)
+        simulation_objects = Ingress.flatten_iterable_of_tuples(Ingress.flatten_iterable_of_tuples(all_steps))
+
+        claimed_portals: set[Portal] = set()
+        links = set()
+        fields = set()
+        for o in simulation_objects:
+            if isinstance(o, Portal):
+                claimed_portals.add(o)
+            if isinstance(o, Link):
+                links.add(o)
+                if not set(o.get_portals()).issubset(claimed_portals):
+                    print(f"WARNING: link created with unclaimed portal: {o}")
+                if not o.get_length() < 2000 and any(map(o.get_portals()[0].is_under_field, fields)):
+                    print(f"WARNING: link cannot be created: {o}")
+            if isinstance(o, Field):
+                fields.add(o)
+        
+        for p in claimed_portals:
+            if not any(map(p.is_under_field, fields)):
+                print(f"WARNING: {p} is unused even though it is part of plan")
+            outbound_links: tuple[Link] = tuple(filter(lambda l: p.__eq__(l.get_frm()), links))
+            if outbound_links:
+                longest_link = max(outbound_links, key=lambda l: l.get_length())
+                required_level = math.sqrt(math.sqrt(longest_link.get_length()/160))
+                if required_level > 4:
+                    print(f"NOTE: {p} needs to be at least lvl {required_level:.0f}")
+            if len(outbound_links) > 24:
+                print(f"WARNING: at portal {p} outbound link count exceeds 2 SBULs: {len(outbound_links)}")
 
     @staticmethod
     def add_from_bkmrk_file(bkmrk_file_path: str) -> None:

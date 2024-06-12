@@ -83,24 +83,6 @@ def plot_IITC_elements(input: list[dict]) -> None:
         else:
             print(f"WARNING: plot_IITC_elements attepting to plot IITC element of type {IITC_element['type']}")
 
-def test_continuity(simulation: dict):
-    # {bounding_box: BoundingBox, steps: [[<Portal|Link|Field>]]}
-    all_steps = map(lambda r: simulation[r]["steps"], simulation)
-    simulation_objects = Ingress.flatten_iterable_of_tuples(Ingress.flatten_iterable_of_tuples(all_steps))
-
-    claimed_portals = set()
-    fields = set()
-    for o in simulation_objects:
-        if isinstance(o, Portal):
-            claimed_portals.add(o)
-        if isinstance(o, Link):
-            if not set(o.get_portals()).issubset(claimed_portals):
-                print(f"WARNING: link created with unclaimed portal: {o}")
-            if not o.get_length() < 2000 and any(map(o.get_portals()[0].is_within_field, fields)):
-                print(f"WARNING: link cannot be created because it is within field (and is long): {o}")
-        if isinstance(o, Field):
-            fields.add(o)
-
 def assistance():
     print("syntax: render.py [-hc] [-p comma] path/to/plan.json")
 
@@ -117,8 +99,6 @@ def main(options):
             return
         elif o == "-c":
             chunk_together = True
-        elif o == "-n":
-            show_portal_names = True
         elif o == "-p":
             if a.lower() == "all":
                 for file in Ingress.portal_group_map.values():
@@ -134,24 +114,20 @@ def main(options):
     assert Ingress.used_portals, "no portals selected to split with, make sure you are using -p"
 
     plan = Ingress.read_json(plan_path, assistance)
-
-    create_directory(image_folder_path)
+    if plan is None: return
 
     simulation = Ingress.simulate_plan(plan, chunk_together=chunk_together)
-    test_continuity(simulation)
-    route_nr = 0
-    for route_data in simulation.values():
+
+    create_directory(image_folder_path)
+    for route_nr, route_data in enumerate(simulation.values()):
         clear_and_setup_plot()
         bb: BoundingBox = route_data["bounding_box"]
         set_plot_bounds(bb)
-        plot_portals(*filter(bb.is_in, Ingress.used_portals), portal_method_to_show = Portal.get_value)
-        step_nr = 0
-        for active_step in route_data["steps"]:
+        plot_portals(*filter(bb.is_in, Ingress.used_portals))
+        for step_nr, active_step in enumerate(route_data["steps"]):
             active_step = Ingress.render(active_step, Ingress.color_maps["green"])
             plot_IITC_elements(active_step)
             plt.savefig(f"{image_folder_path}/{route_nr}-{step_nr}.png", dpi=150)
-            step_nr += 1
-        route_nr += 1
 
     create_gif(image_folder_path, f"{image_folder_path}/_gif.gif", )
 
