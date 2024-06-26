@@ -6,7 +6,7 @@ import re
 from itertools import starmap, combinations, pairwise
 import os
 import pyperclip
-from colorsys import hsv_to_rgb
+import colorsys
 
 def my_translate(value, from_min, from_max, to_min, to_max):
     """(made by GPT-3.5)"""
@@ -351,7 +351,7 @@ class Field:
         return (w1 >= 0) and (w2 >= 0) and (w3 >= 0)
 
     def homogen(self) -> Portal:
-        """return the portal that splits self in the most uniform way"""
+        """return the portal that splits the field in the most uniform way"""
         potential_split_portals = self.get_portals()
         for portal in potential_split_portals:
             fields = self.split(lambda _: portal)
@@ -363,11 +363,7 @@ class Field:
 
     def spiderweb(self) -> Portal:
         """return the portal that's nearest to any of self.portals"""
-        potential_split_portals = self.get_portals()
-        for portal in potential_split_portals:
-            portal.value = min(map(portal.distance, self.portals))
-
-        return min(potential_split_portals, key = Portal.get_value)
+        return min(self.get_portals(), key = lambda p: min(map(p.distance, self.portals)))
 
     @staticmethod
     def hybrid(subdiv) -> Callable:
@@ -383,6 +379,15 @@ class Field:
                 return self.spiderweb()
             return self.homogen()
         return funk
+    
+    def center(self) -> Portal:
+        """return the portal that's nearest to field's center"""
+        c = Portal("center", sum(map(Portal.get_lat, self.portals))/3, sum(map(Portal.get_lng, self.portals))/3)
+        return min(self.get_portals(), key=c.distance)
+
+    def spiral(self) -> Portal:
+        """return the portal that's nearest to any of self.portals that aren't a part of self.parent.portals"""
+        
 
     def split(self, split_method: Callable) -> tuple:
         """creates 3 fields on top of self with a portal chosen by split method"""
@@ -538,26 +543,18 @@ class Tree:
 
 class Ingress:
     """contains only static methods used across the entire project"""
-    portal_group_map = {
-        "pv": "./portals/pavilosta.json",
-        "ar": "./portals/akmens-rags.json",
-        "zp": "./portals/ziemupe.json",
-        "cr": "./portals/cirava.json",
-        "gd": "./portals/gudenieki.json",
-        "jk": "./portals/jurkalne.json",
-        "vp": "./portals/ventspils.json",
-        "uz": "./portals/uzava.json",
-        }
 
-    used_portals: list[Portal] = []
+    used_portals: tuple[Portal] = None
 
-    color_maps = {"rainbow" : lambda variable: hsv_to_rgb(variable, 1, 1),
-                "grayscale": lambda variable: hsv_to_rgb(1, 0, variable),
-                "green": lambda _: (0, 1, 0)}
+    color_maps = {"rainbow" : lambda variable: Ingress.hsv_to_rgb(variable, 1, 1),
+                "grayscale": lambda variable: Ingress.hsv_to_rgb(1, 0, variable),
+                "green": lambda _: (0, 1, 0),
+                "blue": lambda _: (0, 0, 1)
+                }
 
-    split_methods = {"hybrid": Field.hybrid(6),
-                    "spiderweb": Field.spiderweb,
-                    "homogen": Field.homogen}
+    @staticmethod
+    def hsv_to_rgb(h,s,v):
+        return map(lambda a: int(a*255), colorsys.hsv_to_rgb(h,s,v))
 
     # TODO: replace with BoundingBox object
     @staticmethod
@@ -733,6 +730,8 @@ class Ingress:
             return Field.spiderweb
         if re.match(r"^homogen$", s):
             return Field.homogen
+        if re.match(r"^center$", s):
+            return Field.center
         assert False, "unrecognised split_method, available methods: (spiderweb|hybrid#|homogen)"
 
     @staticmethod
@@ -740,36 +739,33 @@ class Ingress:
         if output is None: output = []
         if len(objects) == 0: return []
 
+        # TODO: or maybe for object in objects and isinstance the type?
         portals = tuple(filter(lambda o: isinstance(o, Portal), objects))
         links = tuple(filter(lambda o: isinstance(o, Link), objects))
         fields = tuple(filter(lambda o: isinstance(o, Field), objects))
 
-        # TODO: using Portal.score is not elegant
         max_level = max(Ingress.flatten_iterable_of_tuples((
                         map(Portal.get_value, portals),
                         map(Link.get_level, links),
                         map(Field.get_level, fields))))
-        # TODO: or maybe for object in objects and isinstance the type?
 
         for portal in portals:
             output.append({
                 "type": "marker",
                 "latLng": {"lat": portal.lat, "lng": portal.lng},
-                "color": "#{:02x}{:02x}{:02x}".format(*[int(my_translate(v, 0,1, 0,255)) for v in color_map_function(portal.get_value())])
+                "color": "#{:02x}{:02x}{:02x}".format(*color_map_function(portal.get_value()))
                 })
         for link in links:
-            mapped_level = my_translate(link.get_level(), 0, max_level + 1, 0, 1)
             output.append({
                 "type": "polyline",
                 "latLngs": [{"lat": portal.lat, "lng": portal.lng} for portal in link.portals],
-                "color": "#{:02x}{:02x}{:02x}".format(*[int(my_translate(v, 0,1, 0,255)) for v in color_map_function(mapped_level)])
+                "color": "#{:02x}{:02x}{:02x}".format(*color_map_function(link.get_level()/(max_level+1)))
             })
         for field in fields:
-            mapped_level = my_translate(field.get_level(), 0, max_level + 1, 0, 1)
             output.append({
                 "type": "polygon",
                 "latLngs": [{"lat": portal.lat, "lng": portal.lng} for portal in field.portals],
-                "color": "#{:02x}{:02x}{:02x}".format(*[int(my_translate(v, 0,1, 0,255)) for v in color_map_function(mapped_level)])
+                "color": "#{:02x}{:02x}{:02x}".format(*color_map_function(field.get_level()/(max_level+1)))
             })
 
         return output
@@ -901,9 +897,18 @@ class Ingress:
                 print(f"WARNING: at portal {p} outbound link count exceeds 2 SBULs: {len(outbound_links)}")
 
     @staticmethod
-    def add_from_bkmrk_file(bkmrk_file_path: str) -> None:
+    def get_from_bkmrk_file(bkmrk_file_path: str) -> tuple[Portal]:
         with open(bkmrk_file_path, "r", encoding='utf-8') as f:
             bkmrk = json.load(f)['portals']['idOthers']['bkmrk']
-        for id in bkmrk:
-            portal = Portal(bkmrk[id]["label"], *Ingress.parse_lat_comma_lng(bkmrk[id]["latlng"]))
-            Ingress.used_portals.append(portal)
+
+        return tuple(Portal(bkmrk[id]["label"], *Ingress.parse_lat_comma_lng(bkmrk[id]["latlng"])) for id in bkmrk)
+
+    @staticmethod
+    def load_portals(directory) -> None:
+        portal_groups = []
+        for root, _, files in os.walk(directory):
+            for file in files:
+                if file.endswith('.json'):
+                    portal_groups.append(Ingress.get_from_bkmrk_file(os.path.join(root, file)))
+
+        Ingress.used_portals = Ingress.flatten_iterable_of_tuples(portal_groups)

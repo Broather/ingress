@@ -5,13 +5,18 @@ from main import Ingress
 
 def assistance():
     print("Syntax: python rekey.py [-h] path/to/plan.json")
-    print("""takes the plan.json created by main.py and saves rekey.json with the correct amount of keys reqired from each portal
-
+    print("""
+    Modifies plan.json with the correct amount of keys reqired from each portal
     Options:
         h: calls this help function
     """)
 def main(opts, args):
     assert len(args) == 1, f"ERROR: rekey only accepts one positional argument, {len(args)} were given"
+
+    for o in opts:
+        if o == "-h":
+            assistance()
+            return
 
     with open(args[0], "r", encoding="utf-8") as f:
         input = json.load(f)

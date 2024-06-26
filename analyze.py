@@ -73,23 +73,17 @@ def plot_plan_heatmap(portals: list[Portal], links: list[Link], links_that_can_f
 
 
 def assistance():
-    print("Syntax: ")
+    print("Syntax: python analyze.py [-h] [--input]|[--plan] path/to/input/or/plan.json")
 
 def main(opts: list[tuple[str, str]], args):
     input_path = None
     plan_path = None
+    Ingress.load_portals("./portals")
 
     for o, a in opts:
         if o == "-h":
             assistance()
-            sys.exit(2)
-        elif o == "-p":
-            if a.lower() == "all":
-                for file in Ingress.portal_group_map.values():
-                    Ingress.add_from_bkmrk_file(file)
-            else:
-                for portal_group in a.split(","):
-                    Ingress.add_from_bkmrk_file(Ingress.portal_group_map[portal_group.strip()])
+            return
         elif o == "--input":
             input_path = a
         elif o == "--plan":
@@ -136,5 +130,5 @@ def main(opts: list[tuple[str, str]], args):
         plot_plan_heatmap(portals, links, links_that_can_flip, frm_portal_indicators)
 
 if __name__ == "__main__":
-    opts, args = getopt.getopt(sys.argv[1:], "hp:", ["input=", "plan="])
+    opts, args = getopt.getopt(sys.argv[1:], "h", ["input=", "plan="])
     main(opts, args)

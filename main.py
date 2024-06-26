@@ -13,11 +13,10 @@ def assistance(first_time = False):
         print("""Install IITC for your browser at http://iitc.me and go to http://www.intel.ingress.com
         For more details on which IITC extentions to install refer to the README.md file\n\n""")
 
-    print("Syntax: python main.py [-hol] [-p comma_separated_list[<PV|...|ALL>]] [-c <rainbow|grayscale>] [-s <spiderweb|hybrid5|homogen>]")
+    print("Syntax: python main.py [-hol] [-c <rainbow|grayscale>] [-s <spiderweb|hybrid5|homogen>]")
     print("""
     Options:
         h: calls this help function
-        p: defines which portal groups to add to Ingress.used_portals (only way I could think of to get portal data here)
         a: adds all defined portal groups to Ingress.used_portals
         c: selects the color map to use, (default: rainbow for all layers)
         s: selects the split method to use, (default: hybrid6)
@@ -33,24 +32,18 @@ def main(options: list[tuple[str, str]]):
     make_plan = True
     make_simulation = True
     make_legend = True
-    split_method = Ingress.split_methods["hybrid"]
+    split_method = Field.hybrid(6)
     onlyleaves = False
     color_map = Ingress.color_maps["rainbow"]
     input_path = "./input.json"
     split_profile = None
+    Ingress.load_portals("./portals")
 
     # option parsing
     for o, a in options:
         if o == "-h":
             assistance()
             sys.exit(2)
-        elif o == "-p":
-            if a.lower() == "all":
-                for file in Ingress.portal_group_map.values():
-                    Ingress.add_from_bkmrk_file(file)
-            else:
-                for portal_group in a.split(","):
-                    Ingress.add_from_bkmrk_file(Ingress.portal_group_map[portal_group.lower().strip()])
         elif o == "-c":
             if (color_map := Ingress.color_maps.get(a)) is None:
                 print(f"ERROR: color map {a} not recognised, your options are {Ingress.color_maps.keys()}")
@@ -113,5 +106,5 @@ def main(options: list[tuple[str, str]]):
             Ingress.simulate_plan(plan)
 
 if __name__ == "__main__":
-    opts, _ = getopt.getopt(sys.argv[1:], "hp:c:s:l", ["noplan", "nosim", "nolegend", "splitprofile="])
+    opts, _ = getopt.getopt(sys.argv[1:], "hc:s:l", ["noplan", "nosim", "nolegend", "splitprofile="])
     main(opts)

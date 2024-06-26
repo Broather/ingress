@@ -1,6 +1,5 @@
 import getopt
 import sys
-import json
 import os
 import imageio
 import matplotlib.pyplot as plt
@@ -84,14 +83,19 @@ def plot_IITC_elements(input: list[dict]) -> None:
             print(f"WARNING: plot_IITC_elements attepting to plot IITC element of type {IITC_element['type']}")
 
 def assistance():
-    print("syntax: render.py [-hc] [-p comma] path/to/plan.json")
+    print("Syntax: render.py [-hc] path/to/plan.json")
+    print("""
+    Creates a visual simulation of how the plan would look like if executed in the real world
+    Options:
+        h: calls this help function
+        c: chunks links created from a single portal into one step (quicker animation)""")
 
 def main(options):
     # defaults
     image_folder_path = "./gif_source"
     chunk_together = False
-    show_portal_names = False
     plan_path = "./plan.json"
+    Ingress.load_portals("./portals")
 
     for o, a in options:
         if o == "-h":
@@ -99,13 +103,6 @@ def main(options):
             return
         elif o == "-c":
             chunk_together = True
-        elif o == "-p":
-            if a.lower() == "all":
-                for file in Ingress.portal_group_map.values():
-                    Ingress.add_from_bkmrk_file(file)
-            else:
-                for portal_group in a.split(","):
-                    Ingress.add_from_bkmrk_file(Ingress.portal_group_map[portal_group.strip()])
         elif o == "--plan":
             plan_path = a
         else:
@@ -132,5 +129,5 @@ def main(options):
     create_gif(image_folder_path, f"{image_folder_path}/_gif.gif", )
 
 if __name__ == "__main__":
-    opts, _ = getopt.getopt(sys.argv[1:], "hcnp:", ["plan="])
+    opts, _ = getopt.getopt(sys.argv[1:], "hcn", ["plan="])
     main(opts)

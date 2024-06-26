@@ -1,5 +1,5 @@
 plans
-portals
+portals/**
 *.json
 *.png
 __pycache__
