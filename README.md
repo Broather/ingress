@@ -2,7 +2,7 @@ python CLI tool that automates planning fields in the mobile game Ingress made b
 
 in it's current state, the script relies on the use of the browser add-on [IITC](https://github.com/IITC-CE/ingress-intel-total-conversion) and it's "Draw tools" plug-in aswell as the "Bookmarks for maps and portals" plug-in. ([setup instuctions](https://iitc.app/download_desktop))
 
-once setup, you will need to add any and all portals you wish to make fields with and export them to a .json file under the "portals" directory
+once setup, you will need to add any and all portals you wish to make fields with to bookmarks and copy/paste the data to a .json file under the "portals" directory. (This can be done in the right hand side menu -> Bookmarks Opt -> Copy bookmarks)
 
 ## quickstart
 ### create a virtual environment
