@@ -23,7 +23,7 @@ def main(opts, args):
     steps: dict = input[0]["Steps"]
 
     keys_required = {key: 0 for key in steps}
-    
+
     for key in steps:
         for link in steps[key]["links"]:
             keys_required[link] += 1
@@ -37,7 +37,7 @@ def main(opts, args):
     with open("rekey.json", "w", encoding="utf-8") as f:
         json.dump(input, f, ensure_ascii=False, indent=2)
         print("rekey.json created successfuly")
-    
+
     Ingress.copy_to_clipboard(input)
 
 if __name__ == "__main__":

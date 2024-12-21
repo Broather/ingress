@@ -1,11 +1,13 @@
 import getopt
 import sys
 import os
+from typing import Callable, Sequence
 import imageio
 import matplotlib.pyplot as plt
+import numpy as np
 from ingress import Ingress, Portal, Link, Field, BoundingBox
 
-def plot_portals(*portals: Portal, color = "#ff6600", zorder: int = 1, portal_method_to_show: callable = None):
+def plot_portals(*portals: Portal, color = "#ff6600", zorder: int = 1, portal_method_to_show: Callable|None = None):
     if all(map(lambda p: isinstance(p, Portal), portals)):
         longitudes = list(map(Portal.get_lng, portals))
         latitudes = list(map(Portal.get_lat, portals))
@@ -26,10 +28,10 @@ def create_gif(images_folder: str, output_gif_path: str, fps: int = 5):
     png_file_names.sort(key=lambda file_name: tuple(map(int, file_name.removesuffix(".png").split("-"))))
 
     # Read all PNG images in the folder
-    images = []
+    images: list = []
     for file_name in png_file_names:
         file_path = os.path.join(images_folder, file_name)
-        images.append(imageio.v2.imread(file_path))
+        np.append(images, imageio.v2.imread(file_path))
 
     # Create GIF
     imageio.mimwrite(output_gif_path, images, fps=fps, loop=0)

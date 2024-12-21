@@ -1,6 +1,7 @@
 from itertools import starmap
 import json
 import getopt, sys
+from typing import Callable, Optional
 from ingress import Ingress, Field, Tree
 
 def assistance(first_time = False):
@@ -21,10 +22,11 @@ def assistance(first_time = False):
         c: selects the color map to use, (default: rainbow for all layers)
         s: selects the split method to use, (default: hybrid6)
         l: display only the leaf fields, aka the top most layer of each section
+        --input: specify path to json file containing IITC output
+        --splitprofile: specify split methods for each base field
         --noplan: skip making a plan
         --nosim: skip simulating created plan
         --nolegend: skip including a legend in output.json
-        --input: spiecify path to IITC json file
     """)
 
 def main(options: list[tuple[str, str]]):
@@ -45,10 +47,12 @@ def main(options: list[tuple[str, str]]):
             assistance()
             sys.exit(2)
         elif o == "-c":
-            if (color_map := Ingress.color_maps.get(a)) is None:
+            if (c_map := Ingress.color_maps.get(a)) is None:
                 print(f"ERROR: color map {a} not recognised, your options are {Ingress.color_maps.keys()}")
                 assistance()
                 sys.exit(2)
+            else:
+                color_map = c_map
         elif o == "-s":
             split_method = Ingress.parse_split_method(a.strip())
         elif o == "-l":
@@ -71,7 +75,7 @@ def main(options: list[tuple[str, str]]):
 
     input = Ingress.read_json(input_path, assistance)
     if input is None: return
-    
+
     # base_fields get split, routes get applied to them to make a plan, other just gets appended to output
     base_fields, routes, other = Ingress.parse_input(input)
     # create a uniform split_profile if not defined
@@ -79,13 +83,14 @@ def main(options: list[tuple[str, str]]):
         split_profile = [split_method] * len(base_fields)
 
     assert len(split_profile) == len(base_fields), f"--splitprofile option must recieve {len(base_fields)} methods, recieved {len(split_profile)}"
-    all_trees: tuple[Tree] = tuple(starmap(Tree, list(zip(base_fields, split_profile))))
+    all_trees: list[Tree] = list(starmap(Tree, list(zip(base_fields, split_profile))))
     all_fields = []
     for tree in all_trees:
-        fields = tree.get_fields()
-
         if onlyleaves:
-            fields = list(filter(Field.is_leaf, fields))
+            fields = list(filter(Field.is_leaf, tree.get_fields()))
+        else:
+            fields = tree.get_fields()
+
 
         all_fields.extend(fields)
 

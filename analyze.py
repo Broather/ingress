@@ -59,14 +59,14 @@ def plot_plan_heatmap(portals: list[Portal], links: list[Link], links_that_can_f
     sct = plt.scatter(list(map(Portal.get_lng, portals)), list(map(Portal.get_lat, portals)), size**2 ,list(map(Portal.get_value, portals)), cmap='viridis')
     plt.colorbar(sct)
     for p in portals:
-        plt.annotate(p.get_value() if p.get_value() > 8 else "", (p.get_lng(), p.get_lat()), color = "white", fontsize = size, ha = "center", va = "center")
+        plt.annotate(str(p.get_value()) if p.get_value() > 8 else "", (p.get_lng(), p.get_lat()), color = "white", fontsize = size, ha = "center", va = "center")
     for l in links:
         plt.plot(list(map(Portal.get_lng, l.get_portals())), list(map(Portal.get_lat, l.get_portals())), color="#00ff00", zorder=0)
     for l in links_that_can_flip:
         plt.plot(list(map(Portal.get_lng, l.get_portals())), list(map(Portal.get_lat, l.get_portals())), color="#0000ff", zorder=0)
     for l in frm_portal_ends:
         plt.plot(list(map(Portal.get_lng, l.get_portals())), list(map(Portal.get_lat, l.get_portals())), color="#ff0000", zorder=0)
-        
+
     plt.tight_layout()
     plt.axis("off")
     plt.show()
@@ -97,11 +97,9 @@ def main(opts: list[tuple[str, str]], args):
         if input is None: return
 
         base_fields = Ingress.parse_input(input)[0]
-        split_methods = [Field.spiderweb, Field.hybrid(3), Field.hybrid(4), Field.hybrid(5), Field.hybrid(6), Field.hybrid(7), Field.hybrid(8), Field.homogen]
-        # needs to mirror split_methods
         x_labels = ["spiderweb", "hybrid3", "hybrid4", "hybrid5", "hybrid6", "hybrid7", "hybrid8", "homogen"]
 
-        trees = generate_trees(base_fields, split_methods)
+        trees = generate_trees(base_fields, [Ingress.parse_split_method(label) for label in x_labels])
         arrays = [
             [list(map(Tree.get_MU, row)) for row in trees],
             [list(map(Tree.get_mean_level, row)) for row in trees],
@@ -117,7 +115,7 @@ def main(opts: list[tuple[str, str]], args):
 
         simulation = Ingress.simulate_plan(plan)
         Ingress.validate_simulation(simulation)
-        
+
         all_steps = map(lambda r: simulation[r]["steps"], simulation)
         simulation_objects = Ingress.flatten_iterable_of_tuples(Ingress.flatten_iterable_of_tuples(all_steps))
 

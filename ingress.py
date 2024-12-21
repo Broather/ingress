@@ -1,3 +1,4 @@
+import itertools
 from typing import Iterable, Callable
 import math
 import json
@@ -19,7 +20,7 @@ def my_translate(value, from_min, from_max, to_min, to_max):
 
     # Convert the 0-1 range into a value in the right range.
     return to_min + (value_scaled * right_span)
-    
+
 class Portal:
     """represents a point on Earth's surface"""
     def __init__(self, label: str, lat: float, lng: float, value: int = -1) -> None:
@@ -121,6 +122,7 @@ class Portal:
             return distance
         return -1
 
+    # TODO: forward declare Portals
     @staticmethod
     def from_IITC_marker_polyline(marker: dict, polyline: dict) -> tuple:
         """create a tuple of portals that polyline goes through (marker on first portal)"""
@@ -135,8 +137,8 @@ class Portal:
 
 class Link:
     def __init__(self, frm: Portal, to: Portal, level: int = 0) -> None:
-        self.portals = (frm, to)
-        self.level = level
+        self.portals: tuple[Portal, Portal] = (frm, to)
+        self.level: int = level
 
     def __repr__(self) -> str:
         return f"Link{self.portals}"
@@ -150,41 +152,41 @@ class Link:
             return self.__hash__() == hash(other.portals) or self.__hash__() == hash(other.portals[::-1])
         return False
 
-    def get_portals(self):
+    def get_portals(self) -> tuple[Portal, Portal]:
         return self.portals
 
     def get_frm(self) -> Portal:
         return self.portals[0]
-        
-    def get_to(self):
+
+    def get_to(self) -> Portal:
         return self.portals[1]
 
-    def get_level(self):
+    def get_level(self) -> int:
         return self.level
 
-    def get_resulting_fields(self, context: Iterable):
-        """return a touple of 0 or 1 or 2 fields that would be created when adding self to the web of links: context"""
+    def get_resulting_fields(self, context: Iterable) -> list:
+        """return a list of 0 or 1 or 2 fields that would be created when adding self to the web of links, aka context"""
         links = list(filter(Link.__instancecheck__, context))
         touching_links = list(filter(self.is_touching, links))
-        if len(touching_links) < 2: return tuple()
+        if len(touching_links) < 2: return []
 
         potential_fields = []
         for second_link, third_link in combinations(touching_links, 2):
             if self.is_loop(second_link, third_link):
                 potential_fields.append(Field.from_links(self, second_link, third_link))
-        
+
         # split fields to 2 sides and return field with max get_area from each side
         one_side = list(filter(self.is_on_side, potential_fields))
         other_side = list(filter(lambda p: not self.is_on_side(p), potential_fields))
-        
+
         if len(one_side) != 0 and len(other_side) != 0:
-            return (max(one_side, key=Field.get_area), max(other_side, key=Field.get_area))
+            return [max(one_side, key=Field.get_area), max(other_side, key=Field.get_area)]
         elif len(one_side) == 0 and len(other_side) != 0:
-            return (max(other_side, key=Field.get_area), )
+            return [max(other_side, key=Field.get_area)]
         elif len(one_side) != 0 and len(other_side) == 0:
-            return (max(one_side, key=Field.get_area), )
+            return [max(one_side, key=Field.get_area)]
         else:
-            return tuple()
+            return []
 
     def get_length(self) -> float:
         """return length in meters"""
@@ -194,6 +196,7 @@ class Link:
     def is_within_field(self, other: object) -> bool:
         if isinstance(other, Field):
             return any(map(other.is_in, self.portals))
+        return False
 
     def is_part_of_field(self, other: object) -> bool:
         if isinstance(other, Field):
@@ -212,7 +215,7 @@ class Link:
                         one.is_touching(other),
                         one.intersection(other).isdisjoint(self.portals)])
         return False
-    
+
     def is_on_side(self, other: object) -> bool:
         if isinstance(other, Field) and self.is_part_of_field(other):
             adjacent_portal = set(other.portals).difference(set(self.portals)).pop()
@@ -220,6 +223,7 @@ class Link:
             position = (b.lng - a.lng) * (adjacent_portal.lat - a.lat) - (b.lat - a.lat) * (adjacent_portal.lng - a.lng)
             return position > 0
             # position = (Bx - Ax) * (Y - Ay) - (By - Ay) * (X - Ax)
+        return False
 
     def intersection(self, other: object) -> set:
         if isinstance(other, Link) and self.is_touching(other):
@@ -230,7 +234,7 @@ class Link:
 class Field:
     """represents an area between 3 distinct points on Earth's surface"""
     def __init__(self, p1: Portal, p2: Portal, p3: Portal, level: int = 0) -> None:
-        self.portals: tuple[Portal] = (p1,p2,p3)
+        self.portals: tuple[Portal, Portal, Portal] = (p1,p2,p3)
         self.level: int = level
         self.split_portal = None
         self.children: list[Field] = []
@@ -241,17 +245,21 @@ class Field:
     @staticmethod
     def from_links(l1: Link, l2: Link, l3: Link):
         """create a field from 3 links if possible"""
-        assert l1.is_loop(l2, l3), f"ERROR: links don't make a closed loop"
+        assert l1.is_loop(l2, l3), "from_links: links don't make a closed loop"
 
-        portals = tuple(set(l1.portals).union(set(l2.portals), set(l3.portals)))
-        return Field(*portals, min(map(Link.get_level, (l1, l2, l3))))
+        p1,p2,p3 = tuple(set(l1.portals).union(set(l2.portals), set(l3.portals)))
+        return Field(p1,p2,p3, min(map(Link.get_level, (l1, l2, l3))))
 
     @staticmethod
-    def from_route(route: tuple[Portal], level: int):
+    def from_route(route: tuple[Portal, ...], level: int):
         """create a field with more than 3 points
-        
+
         Only used to make the legend's numbers."""
-        field = Field(*route[:3], level)
+        assert len(route) >= 3, "from_route: needs at least 3 portals"
+
+        p1,p2,p3 = route[:3]
+        field = Field(p1,p2,p3, level)
+        # TODO: define NgonField class with self.portals: list[portals]
         field.portals = route
 
         return field
@@ -262,8 +270,8 @@ class Field:
         assert IITC_polygon["type"] == "polygon", f"ERROR: can't parse element of type {IITC_polygon['type']}"
         assert len(IITC_polygon["latLngs"]) == 3, f"ERROR: can't make field from polygon with {len(IITC_polygon['latLngs'])} points"
 
-        portals = tuple(map(Ingress.find_portal_from_latLng, IITC_polygon["latLngs"]))
-        return Field(*portals)
+        p1,p2,p3 = tuple(map(Ingress.find_portal_from_latLng, IITC_polygon["latLngs"]))
+        return Field(p1,p2,p3)
 
     def get_zelda_fields(self, subdivisions: int = 1) -> tuple:
         """return 3 fields that together look like the triforce logo from Zelda"""
@@ -279,8 +287,12 @@ class Field:
 
         return tuple(fields)
 
-    def get_links(self) -> tuple[Link]:
-        return tuple(starmap(Link, ((p1,p2,self.get_level()) for p1, p2 in combinations(self.portals, 2))))
+    def get_links(self) -> tuple[Link, Link, Link]:
+        assert len(self.portals) == 3, f"field has {len(self.portals)} (expected 3)"
+        p1,p2,p3 = self.portals
+        return (Link(p1,p2,self.get_level()),
+                     Link(p2, p3, self.get_level()),
+                     Link(p3,p1, self.get_level()))
 
     def get_MU(self) -> int:
         MU_COEFICIENT = 4.25 * 10**-5
@@ -300,11 +312,11 @@ class Field:
     def get_level(self) -> int:
         return self.level
 
-    def get_portals(self) -> tuple[Portal]:
+    def get_portals(self) -> tuple[Portal, ...]:
         """return all portals that are inside of field (not including the 3 that make up the field)"""
         return tuple(filter(self.is_in, Ingress.used_portals))
 
-    def get_portals_inclusive(self) -> tuple[Portal]:
+    def get_portals_inclusive(self) -> tuple[Portal, ...]:
         """return all portals that are inside of field (including the 3 that make up the field)"""
         return self.get_portals() + self.portals
 
@@ -370,7 +382,7 @@ class Field:
         """return a split method based on subdivisions of zelda fields"""
         def funk(self: Field) -> Portal:
             """return a portal just like spiderweb if there are portals in any of the 3 zelda fields
-            
+
             A mix between spiderweb (subdiv = 2) and homogen (subdiv = 9).
             The higher the subdivisions value, the less likely to find portals within them
             and more likely for the function to behave like homogen."""
@@ -379,29 +391,33 @@ class Field:
                 return self.spiderweb()
             return self.homogen()
         return funk
-    
+
     def center(self) -> Portal:
         """return the portal that's nearest to field's center"""
         c = Portal("center", sum(map(Portal.get_lat, self.portals))/3, sum(map(Portal.get_lng, self.portals))/3)
         return min(self.get_portals(), key=c.distance)
 
-    def spiral(self) -> Portal:
-        """return the portal that's nearest to any of self.portals that aren't a part of self.parent.portals"""
-        
+    # def spiral(self) -> Portal:
+    #     """return the portal that's nearest to any of self.portals that aren't a part of self.parent.portals"""
 
+# TODO: forward declare Field somehow
+    # def split(self, split_method: Callable) -> tuple[Field, Field, Field]:
     def split(self, split_method: Callable) -> tuple:
         """creates 3 fields on top of self with a portal chosen by split method"""
         split_portal = split_method(self)
-        return tuple(Field(*link.portals, split_portal, self.get_level() + 1) for link in self.get_links())
+        l1,l2,l3 = self.get_links()
+        return (Field(*l1.get_portals(), split_portal, self.get_level() + 1),
+                Field(*l2.get_portals(), split_portal, self.get_level() + 1),
+                Field(*l3.get_portals(), split_portal, self.get_level() + 1))
 
 class BoundingBox:
-    def __init__(self, objects: list[Portal|Link|Field], grow_to_square: bool = False, padding: bool = False) -> tuple[Portal, Portal]:
+    def __init__(self, objects: list, grow_to_square: bool = False, padding: bool = False):
         # TODO: add some debugging squares or something to see how it's growing to square in different situations
         portals = tuple(filter(lambda o: isinstance(o, Portal), objects))
         links = tuple(filter(lambda o: isinstance(o, Link), objects))
         fields = tuple(filter(lambda o: isinstance(o, Field), objects))
 
-        all_portals = Ingress.flatten_tuples(portals,
+        all_portals = Ingress.flatten_iterables(portals,
                     Ingress.flatten_iterable_of_tuples(map(Link.get_portals, links)),
                     Ingress.flatten_iterable_of_tuples(map(Field.get_portals_inclusive, fields)))
 
@@ -442,21 +458,20 @@ class BoundingBox:
             tl.lat += delta_latitude * .05
             tl.lng -= delta_longitude * .05
 
-
         self.tl = tl
         self.br = br
-        
+
     def is_in(self, p: Portal):
         return (self.br.lat < p.lat < self.tl.lat) and (self.tl.lng < p.lng < self.br.lng)
 
 class Tree:
-    def __init__(self, root: Field, split_method: Callable, announce_self = True) -> None:
+    def __init__(self, root: Field, split_method: Callable = Field.homogen, announce_self: bool = True) -> None:
         self.root = root
         self.split_method = split_method
 
         while leaves_with_portals_in_them := tuple(filter(Field.has_portals, filter(Field.is_leaf, self.get_fields()))):
             for leaf in leaves_with_portals_in_them:
-                leaf.children = leaf.split(self.split_method)
+                leaf.children = list(leaf.split(self.split_method))
 
         if announce_self: print(self)
 
@@ -467,10 +482,12 @@ class Tree:
                 "amount_of_links": len(self.get_links()),
                 "amount_of_fields": len(self.get_fields()),
                 "base_field": self.root}
-        
-        return "MU: %6d mean lvl: %5.2f stndrd deev: %4.2f links: %3d fields: %3d (%r)" % tuple(data.values())
 
-    def get_fields(self, node: Field = None) -> tuple[Field]:
+        return "MU: %6d mean lvl: %5.2f stndrd deev: %4.2f links: %3d fields: %3d (%r)" % tuple(data.values())
+    def get_root(self):
+        return self.root
+
+    def get_fields(self, node: Field|None = None) -> list[Field]:
         """return node and all lower standing nodes, uses root if node not given (made by GTP-3.5).
 
         Widely used function across the entire project."""
@@ -487,7 +504,7 @@ class Tree:
             for child in current_node.children:
                 queue.append(child)
 
-        return tuple(fields)
+        return fields
 
     def get_mean_level(self) -> float:
         leaves = list(filter(Field.is_leaf, self.get_fields()))
@@ -528,7 +545,7 @@ class Tree:
     def get_MU(self):
         return sum(map(Field.get_MU, self.get_fields()))
 
-    def display(self, field: Field = None):
+    def display(self, field: Field|None = None):
         if field is None:
             field = self.root
 
@@ -537,41 +554,44 @@ class Tree:
         for child in field.children:
             self.display(child)
 
-    def get_links(self) -> tuple[Link]:
+    def get_links(self) -> tuple[Link, ...]:
         all_links = map(Field.get_links, self.get_fields())
-        return set(Ingress.flatten_iterable_of_tuples(all_links))
+        return tuple(set(Ingress.flatten_iterable_of_tuples(all_links)))
 
 class Ingress:
     """contains only static methods used across the entire project"""
 
-    used_portals: tuple[Portal] = None
+    used_portals: list[Portal] = []
 
-    color_maps = {"rainbow" : lambda variable: Ingress.hsv_to_rgb(variable, 1, 1),
+    color_maps: dict[str, Callable[[float], tuple[int, int, int]]] = {"rainbow" : lambda variable: Ingress.hsv_to_rgb(variable, 1, 1),
                 "grayscale": lambda variable: Ingress.hsv_to_rgb(1, 0, variable),
-                "green": lambda _: (0, 1, 0),
-                "blue": lambda _: (0, 0, 1)
+                "green": lambda _: (0, 255, 0),
+                "blue": lambda _: (0, 0, 255),
+                "white": lambda _: (255, 255, 255)
                 }
 
     @staticmethod
-    def hsv_to_rgb(h,s,v):
-        return map(lambda a: int(a*255), colorsys.hsv_to_rgb(h,s,v))
+    def hsv_to_rgb(h: float, s: float, v: float) -> tuple[int, int, int]:
+        """return tuple with 3 integers each with range [0-255]"""
+        r,g,b = colorsys.hsv_to_rgb(h,s,v)
+        return (int(r*255), int(g*255), int(b*255))
 
     # TODO: replace with BoundingBox object
     @staticmethod
-    def draw_level(number: int, bounding_box: tuple[Portal, Portal], field_level: int = -1) -> tuple[Field]:
+    def draw_number(number: int, bounding_box: tuple[Portal, Portal], field_level: int = -1) -> tuple[Field]:
         """return field/-s that represent number (one field per digit in number)"""
         # NOTE: consider importing this from a .json file
-        DIGIT_MAP = {
-                "0":((1,0),(0,1),(1,3),(4,2),(3,1),(0,2),(1,4),(3,4),(4,3),(3,0)),
-                "1":((1,0),(1,0),(0,1),(0,3),(3,3),(3,4),(4,4),(4,0),(3,0),(3,1),(1,1)),
-                "2":((1,0),(0,1),(0,3),(1,4),(2,4),(3,2),(3,4),(4,4),(4,0),(3,0),(2,2),(1,2),(2,1)),
-                "3":((0,0),(0,3),(1,4),(2,3),(3,4),(4,3),(4,1),(2,0),(4,2),(3,3),(2,2),(2,1),(1,0),(2,2),(1,3),(0,3),(1,1)),
-                "4":((2,0),(0,2),(0,4),(1,4),(2,3),(0,3),(2,1),(2,4),(3,4),(3,3),(4,3),(4,2),(3,2),(3,0)),
-                "5":((0,0),(0,4),(1,4),(1,1),(2,1),(1,2),(2,4),(3,4),(4,3),(4,0),(3,0),(3,3),(2,3),(3,2),(3,1),(2,0)),
-                "6":((1,0),(0,1),(0,3),(1,4),(1,3),(0,2),(1,1),(2,4),(3,4),(3,1),(2,1),(3,4),(4,3),(4,1),(3,0)),
-                "7":((0,0),(0,4),(1,4),(2,2),(2,3),(3,3),(3,2),(4,2),(4,1),(3,1),(3,0),(2,0),(2,1),(1,3),(1,1)),
-                "8":((1,0),(0,1),(1,2),(2,1),(0,1),(0,2),(1,2),(1,3),(2,4),(3,4),(4,3),(4,2),(3,1),(2,2),(2,3),(3,3),(4,2),(4,1),(3,0),(2,1)),
-                "9":((1,0),(0,1),(0,3),(1,4),(3,4),(4,3),(4,1),(3,0),(2,0),(4,2),(3,3),(1,3),(1,1),(0,2),(1,3),(2,1)),
+        DIGIT_MAP: dict[str, list[tuple[int, int]]] = {
+                "0":[(1,0),(0,1),(1,3),(4,2),(3,1),(0,2),(1,4),(3,4),(4,3),(3,0)],
+                "1":[(1,0),(1,0),(0,1),(0,3),(3,3),(3,4),(4,4),(4,0),(3,0),(3,1),(1,1)],
+                "2":[(1,0),(0,1),(0,3),(1,4),(2,4),(3,2),(3,4),(4,4),(4,0),(3,0),(2,2),(1,2),(2,1)],
+                "3":[(0,0),(0,3),(1,4),(2,3),(3,4),(4,3),(4,1),(2,0),(4,2),(3,3),(2,2),(2,1),(1,0),(2,2),(1,3),(0,3),(1,1)],
+                "4":[(2,0),(0,2),(0,4),(1,4),(2,3),(0,3),(2,1),(2,4),(3,4),(3,3),(4,3),(4,2),(3,2),(3,0)],
+                "5":[(0,0),(0,4),(1,4),(1,1),(2,1),(1,2),(2,4),(3,4),(4,3),(4,0),(3,0),(3,3),(2,3),(3,2),(3,1),(2,0)],
+                "6":[(1,0),(0,1),(0,3),(1,4),(1,3),(0,2),(1,1),(2,4),(3,4),(3,1),(2,1),(3,4),(4,3),(4,1),(3,0)],
+                "7":[(0,0),(0,4),(1,4),(2,2),(2,3),(3,3),(3,2),(4,2),(4,1),(3,1),(3,0),(2,0),(2,1),(1,3),(1,1)],
+                "8":[(1,0),(0,1),(1,2),(2,1),(0,1),(0,2),(1,2),(1,3),(2,4),(3,4),(4,3),(4,2),(3,1),(2,2),(2,3),(3,3),(4,2),(4,1),(3,0),(2,1)],
+                "9":[(1,0),(0,1),(0,3),(1,4),(3,4),(4,3),(4,1),(3,0),(2,0),(4,2),(3,3),(1,3),(1,1),(0,2),(1,3),(2,1)],
                     }
         if field_level < 0: field_level = number-1
 
@@ -588,8 +608,9 @@ class Ingress:
             lng_unit = (br.lng - tl.lng)/5
             portal_grid = {(lat_offset, lng_offset): Portal(str((lat_offset, lng_offset)), tl.lat + lat_offset*lat_unit, tl.lng + lng_offset*lng_unit) for lng_offset in range(5) for lat_offset in range(5)}
 
+            # TODO: ceate NgonField instance instead
             output.append(Field.from_route(
-                tuple(map(portal_grid.get, DIGIT_MAP[str(digit)])),
+                tuple(map(lambda t: portal_grid.get(t, Portal("", 0, 0)), DIGIT_MAP[digit])),
                 field_level))
         return tuple(output)
 
@@ -611,13 +632,13 @@ class Ingress:
             offset = segment_length * (level - min_field_level)
             item_tl = Portal("legend item's top left", bl.lat+offset+segment_length, bl.lng-(segment_length*1.87)-PADDING)
             item_br = Portal("legend item's bottom right", bl.lat+offset, bl.lng-PADDING)
-            output.append(Ingress.draw_level(level+1, (item_tl, item_br)))
+            output.append(Ingress.draw_number(level+1, (item_tl, item_br)))
 
             if not onlyleaves:
                 for lvl in range(level):
-                    output.append(Ingress.draw_level(level+1, (item_tl, item_br), field_level = lvl))
+                    output.append(Ingress.draw_number(level+1, (item_tl, item_br), field_level = lvl))
 
-        return Ingress.flatten_iterable_of_tuples(output)
+        return list(Ingress.flatten_iterable_of_tuples(output))
 
     @staticmethod
     def split_bounding_box_vertically(bounding_box: tuple[Portal, Portal]):
@@ -627,13 +648,13 @@ class Ingress:
         left_bb_br = bl.find_middle(br)
 
         return ((tl, left_bb_br), (right_bb_tl, br))
+    # TODO: these flatten functions could combine into one using genereics (requres python 3.12)
     @staticmethod
-    def flatten_tuples(*tuples: tuple) -> tuple:
-        return tuple(element for tuple in tuples for element in tuple)
+    def flatten_iterables(*args: Iterable) -> list:
+        return list(element for iterable in args for element in iterable)
     @staticmethod
     def flatten_iterable_of_tuples(iterable: Iterable) -> tuple:
         return tuple(element for tuple in iterable for element in tuple)
-
     @staticmethod
     def flatten_iterable_of_sets(iterable: Iterable) -> set:
         union_set = set()
@@ -693,7 +714,7 @@ class Ingress:
         return [float(latLng["lat"]), float(latLng["lng"])]
 
     @staticmethod
-    def parse_input(IITC_elements: list[dict]) -> tuple[list[Field], list[list[Portal]], list[dict]]:
+    def parse_input(IITC_elements: list[dict]) -> tuple[list[Field], list[tuple], list[dict]]:
         """parse the contents of input.json (which should be full of IITC copy/paste)"""
         white = "#ffffff"
 
@@ -704,16 +725,10 @@ class Ingress:
 
         polygons = [e for e in IITC_elements if e["type"] == "polygon" and e["color"] == white]
 
-        base_fields = []
-        routes = []
-
-        for polygon in polygons:
-            base_fields.append(Field.from_IITC_polygon(polygon))
-
+        base_fields: list[Field] = list(map(Field.from_IITC_polygon, polygons))
         # TODO: one last step towards ultimate robustness in terms of "applying routes to fields"
         # TODO: relies on correct creation order
-        for marker, polyline in zip(markers, polylines):
-            routes.append(Portal.from_IITC_marker_polyline(marker, polyline))
+        routes = list(itertools.starmap(Portal.from_IITC_marker_polyline, zip(markers, polylines)))
 
         other = [e for e in IITC_elements if e["color"] != white]
 
@@ -726,23 +741,23 @@ class Ingress:
         if match := re.match(r"^hybrid(\d)$", s):
             digit = int(match.group(1))
             return Field.hybrid(digit)
-        if re.match(r"^spiderweb$", s):
+        if s == "spiderweb":
             return Field.spiderweb
-        if re.match(r"^homogen$", s):
+        if s == "homogen":
             return Field.homogen
-        if re.match(r"^center$", s):
+        if s == "center":
             return Field.center
-        assert False, "unrecognised split_method, available methods: (spiderweb|hybrid#|homogen)"
+        assert False, f"unrecognised split_method: {s} (available methods: spiderweb|hybrid#|homogen)"
 
     @staticmethod
-    def render(objects: tuple[Portal|Link|Field], color_map_function: Callable, output: list = None) -> list[dict]:
+    def render(objects: list, color_map_function: Callable, output: list|None = None) -> list[dict]:
         if output is None: output = []
         if len(objects) == 0: return []
 
         # TODO: or maybe for object in objects and isinstance the type?
-        portals = tuple(filter(lambda o: isinstance(o, Portal), objects))
-        links = tuple(filter(lambda o: isinstance(o, Link), objects))
-        fields = tuple(filter(lambda o: isinstance(o, Field), objects))
+        portals: list[Portal] = list(filter(lambda o: isinstance(o, Portal), objects))
+        links: list[Link] = list(filter(lambda o: isinstance(o, Link), objects))
+        fields: list[Field] = list(filter(lambda o: isinstance(o, Field), objects))
 
         max_level = max(Ingress.flatten_iterable_of_tuples((
                         map(Portal.get_value, portals),
@@ -776,7 +791,7 @@ class Ingress:
         AVERAGE_WALKING_SPEED = 84 # meters per minute
         COOLDOWN_BETWEEN_HACKS = 5 # minutes
 
-        all_fields: tuple[Field] = Ingress.flatten_iterable_of_tuples(map(Tree.get_fields, trees))
+        all_fields: tuple[Field, ...] = Ingress.flatten_iterable_of_tuples(map(Tree.get_fields, trees))
         all_links: set[Link] = set(Ingress.flatten_iterable_of_tuples(map(Tree.get_links, trees)))
         all_portals = set(Ingress.flatten_iterable_of_tuples(map(Field.get_portals_inclusive, all_fields)))
 
@@ -787,7 +802,9 @@ class Ingress:
 
         plan_routes = {}
         visited_portals = set()
-        created_links = set()
+        created_links: set[Link] = set()
+        key_counter = 0
+        SBUL_counter = 0
         for route in routes:
             steps = {}
             SBUL_count = 0
@@ -802,7 +819,7 @@ class Ingress:
                 created_links.update(outbound_links)
 
                 SBUL_count += 0 if len(outbound_links) == 0 else (len(outbound_links) - 1) // 8
-                
+
                 # TODO: we're double nested over here, I'm sure there's a way to overcome this
                 # primary sort criteria: filter all the fields that the link is part of and get their levels and pick the min level
                 # secondary sort criteria: longest link first
@@ -819,6 +836,9 @@ class Ingress:
             route_length = round(sum(starmap(Portal.distance, pairwise(route))), 2)
             time_to_complete = route_length / AVERAGE_WALKING_SPEED + key_count * COOLDOWN_BETWEEN_HACKS
 
+            key_counter += key_count
+            SBUL_counter += SBUL_count
+
             plan_routes[f"{route[0]}...{route[-1]}"] = {
                 "keys_required": key_count,
                 "SBULs_required": SBUL_count,
@@ -826,12 +846,12 @@ class Ingress:
                 "estimated_time_to_complete_(minutes)": round(time_to_complete, 2),
                 "estimated_time_to_complete_(hours)": round(time_to_complete/60, 2),
                 "steps": steps
-                }
+            }
 
         plan = {
             "portals_involved": len(visited_portals),
-            "total_keys_required": sum(map(lambda k: plan_routes[k]["keys_required"], plan_routes)),
-            "total_SBULs_required": sum(map(lambda k: plan_routes[k]["SBULs_required"], plan_routes)),
+            "total_keys_required": key_counter,
+            "total_SBULs_required": SBUL_counter,
             "routes": plan_routes
             }
         return plan
@@ -840,29 +860,29 @@ class Ingress:
     def simulate_plan(plan: dict, chunk_together: bool = False) -> dict:
         """return route: {bounding_box: BoundingBox, steps: [[<Portal|Link|Field>]]}"""
         output = {}
-        context = []
+        context: list[Link] = []
         routes: dict = plan["routes"]
         for route_title in routes:
             plan_steps: dict = routes[route_title]["steps"]
             route_steps = []
             for active_portal in map(Ingress.find_portal, plan_steps):
                 active_portal.value = len(plan_steps[active_portal.get_label()]["links"])
-                portal_steps = [(active_portal, )]
+                portal_steps = [(active_portal)]
                 portals_to_link_to = tuple(map(Ingress.find_portal, plan_steps[active_portal.get_label()]["links"]))
                 links = map(active_portal.create_link, portals_to_link_to)
 
                 for link in links:
-                    portal_steps.append((link, *link.get_resulting_fields(context))) 
+                    portal_steps.append((link, *link.get_resulting_fields(context)))
                     context.append(link)
 
-                if chunk_together: portal_steps = (Ingress.flatten_iterable_of_tuples(portal_steps), )
+                if chunk_together: portal_steps = [Ingress.flatten_iterable_of_tuples(portal_steps)]
                 route_steps.extend(portal_steps)
 
-            bb = BoundingBox(Ingress.flatten_iterable_of_tuples(route_steps), grow_to_square=True, padding=True)
+            bb = BoundingBox(list(Ingress.flatten_iterable_of_tuples(route_steps)), grow_to_square=True, padding=True)
             output[route_title] = {"bounding_box": bb, "steps": route_steps}
 
         return output
-    
+
     @staticmethod
     def validate_simulation(simulation: dict):
         # {bounding_box: BoundingBox, steps: [[<Portal|Link|Field>]]}
@@ -871,7 +891,7 @@ class Ingress:
 
         claimed_portals: set[Portal] = set()
         links = set()
-        fields = set()
+        fields: set[Field] = set()
         for o in simulation_objects:
             if isinstance(o, Portal):
                 claimed_portals.add(o)
@@ -883,11 +903,11 @@ class Ingress:
                     print(f"WARNING: link cannot be created: {o}")
             if isinstance(o, Field):
                 fields.add(o)
-        
+
         for p in claimed_portals:
             if not any(map(p.is_under_field, fields)):
                 print(f"WARNING: {p} is unused even though it is part of plan")
-            outbound_links: tuple[Link] = tuple(filter(lambda l: p.__eq__(l.get_frm()), links))
+            outbound_links: list[Link] = list(filter(lambda l: p.__eq__(l.get_frm()), links))
             if outbound_links:
                 longest_link = max(outbound_links, key=lambda l: l.get_length())
                 required_level = math.sqrt(math.sqrt(longest_link.get_length()/160))
@@ -897,11 +917,15 @@ class Ingress:
                 print(f"WARNING: at portal {p} outbound link count exceeds 2 SBULs: {len(outbound_links)}")
 
     @staticmethod
-    def get_from_bkmrk_file(bkmrk_file_path: str) -> tuple[Portal]:
+    def get_from_bkmrk_file(bkmrk_file_path: str) -> list[Portal]:
         with open(bkmrk_file_path, "r", encoding='utf-8') as f:
             bkmrk = json.load(f)['portals']['idOthers']['bkmrk']
 
-        return tuple(Portal(bkmrk[id]["label"], *Ingress.parse_lat_comma_lng(bkmrk[id]["latlng"])) for id in bkmrk)
+        result = []
+        for id in bkmrk:
+            lat, lng = Ingress.parse_lat_comma_lng(bkmrk[id]["latlng"])
+            result.append((Portal(bkmrk[id]["label"], lat, lng)))
+        return result
 
     @staticmethod
     def load_portals(directory) -> None:
@@ -911,4 +935,4 @@ class Ingress:
                 if file.endswith('.json'):
                     portal_groups.append(Ingress.get_from_bkmrk_file(os.path.join(root, file)))
 
-        Ingress.used_portals = Ingress.flatten_iterable_of_tuples(portal_groups)
+        Ingress.used_portals = list(Ingress.flatten_iterable_of_tuples(portal_groups))
