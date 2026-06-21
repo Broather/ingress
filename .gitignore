@@ -1,10 +1,10 @@
-plans
-portals/**
+__pycache__
+.vscode
+venv
+
 *.json
 *.png
-__pycache__
-venv
-.vscode
+
 gif_source
 NOTES.md
 test.py

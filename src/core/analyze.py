@@ -2,8 +2,9 @@ import sys
 import getopt
 from itertools import starmap
 import matplotlib.pyplot as plt
-from ingress import Ingress, Portal, Link, Field, Tree
 from typing import Callable
+
+from ingress import Ingress, Portal, Link, Field, Tree
 
 # TODO: opportunity to speed things up with concurency
 def generate_trees(axis0: list[Field], axis1: list[Callable]) -> list[list]:

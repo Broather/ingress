@@ -1,11 +1,11 @@
 import getopt
 import sys
 import os
-from typing import Callable, Sequence
+from typing import Callable
 import imageio
 import matplotlib.pyplot as plt
 import numpy as np
-from ingress import Ingress, Portal, Link, Field, BoundingBox
+from ingress import Ingress, Portal, BoundingBox
 
 def plot_portals(*portals: Portal, color = "#ff6600", zorder: int = 1, portal_method_to_show: Callable|None = None):
     if all(map(lambda p: isinstance(p, Portal), portals)):
@@ -82,7 +82,7 @@ def plot_IITC_elements(input: list[dict]) -> None:
                         color = IITC_element["color"],
                         zorder = 3)
         else:
-            print(f"WARNING: plot_IITC_elements attepting to plot IITC element of type {IITC_element['type']}")
+            print(f"WARNING: plot_IITC_elements attempting to plot IITC element of type {IITC_element['type']}")
 
 def assistance():
     print("Syntax: render.py [-hc] path/to/plan.json")

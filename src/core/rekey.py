@@ -1,7 +1,7 @@
 import sys
 import getopt
 import json
-from main import Ingress
+from ingress import Ingress
 
 def assistance():
     print("Syntax: python rekey.py [-h] path/to/plan.json")

@@ -1,8 +1,6 @@
 from itertools import starmap
-import json
 import getopt, sys
-from typing import Callable, Optional
-from ingress import Ingress, Field, Tree
+from core.ingress import Ingress, Field, Tree
 
 def assistance(first_time = False):
     if first_time:
