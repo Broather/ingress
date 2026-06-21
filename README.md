@@ -12,7 +12,7 @@ python -m venv venv
 ### activate the virtual environment
 #### in git bash
 ```
-. venv/Scripts/activate
+. venv/bin/activate
 ```
 #### in powershell
 ```

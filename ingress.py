@@ -1,3 +1,4 @@
+from __future__ import annotations
 import itertools
 from typing import Iterable, Callable
 import math
@@ -164,7 +165,7 @@ class Link:
     def get_level(self) -> int:
         return self.level
 
-    def get_resulting_fields(self, context: Iterable) -> list:
+    def get_resulting_fields(self, context: Iterable) -> list[Field]:
         """return a list of 0 or 1 or 2 fields that would be created when adding self to the web of links, aka context"""
         links = list(filter(Link.__instancecheck__, context))
         touching_links = list(filter(self.is_touching, links))
@@ -342,9 +343,9 @@ class Field:
 
         a, b, c = self.portals
 
-        assert a.lat != b.lat and a.lng != b.lng, f"ERROR: Field has 2 Portals in the same location: ({a} and {b})"
-        assert a.lat != c.lat and a.lng != c.lng, f"ERROR: Field has 2 Portals in the same location: ({a} and {c})"
-        assert b.lat != c.lat and b.lng != c.lng, f"ERROR: Field has 2 Portals in the same location: ({b} and {c})"
+        assert a.lat != b.lat or a.lng != b.lng, f"ERROR: Field has 2 Portals in the same location: ({a} and {b})"
+        assert a.lat != c.lat or a.lng != c.lng, f"ERROR: Field has 2 Portals in the same location: ({a} and {c})"
+        assert b.lat != c.lat or b.lng != c.lng, f"ERROR: Field has 2 Portals in the same location: ({b} and {c})"
 
         d1 = sign(portal, a, b)
         d2 = sign(portal, b, c)
@@ -866,12 +867,16 @@ class Ingress:
             plan_steps: dict = routes[route_title]["steps"]
             route_steps = []
             for active_portal in map(Ingress.find_portal, plan_steps):
+                if (not active_portal): continue
+                
                 active_portal.value = len(plan_steps[active_portal.get_label()]["links"])
                 portal_steps = [(active_portal)]
                 portals_to_link_to = tuple(map(Ingress.find_portal, plan_steps[active_portal.get_label()]["links"]))
                 links = map(active_portal.create_link, portals_to_link_to)
 
                 for link in links:
+                    if (not link): continue
+
                     portal_steps.append((link, *link.get_resulting_fields(context)))
                     context.append(link)
 

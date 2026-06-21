@@ -35,7 +35,7 @@ def main(options: list[tuple[str, str]]):
     make_simulation = True
     make_legend = True
     split_method = Field.hybrid(6)
-    onlyleaves = False
+    onlyleaves = True
     color_map = Ingress.color_maps["rainbow"]
     input_path = "./input.json"
     split_profile = None
