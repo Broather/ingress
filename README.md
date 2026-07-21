@@ -1,8 +1,15 @@
-python CLI tool that automates planning fields in the mobile game Ingress made by Niantic
+A terminal UI to create 2D shapes and search for them in a set of points
 
-in it's current state, the script relies on the use of the browser add-on [IITC](https://github.com/IITC-CE/ingress-intel-total-conversion) and it's "Draw tools" plug-in aswell as the "Bookmarks for maps and portals" plug-in. ([setup instuctions](https://iitc.app/download_desktop))
+Made for use with the geo-location based mobile game "Ingress" made by "Niantic"
 
-once setup, you will need to add any and all portals you wish to make fields with to bookmarks and copy/paste the data to a .json file under the "portals" directory. (This can be done in the right hand side menu -> Bookmarks Opt -> Copy bookmarks)
+In it's current state, the script relies on the use of the browser add-on [IITC](https://iitc.app/download_desktop) along with the following plugins:
+
+- [Draw tools](https://iitc.app/download_desktop#draw-tools-by-breunigs)
+- [Bookmarks for maps and portals](https://iitc.app/download_desktop#bookmarks-by-ZasoGD)
+
+Once setup, add any and all portals to bookmarks and copy/paste the data to a `.json` file in a `portals` directory in project root. 
+
+Use IITC's right hand side menu > `Bookmarks Opt` > `Copy bookmarks`
 
 ## quickstart
 ### create a virtual environment

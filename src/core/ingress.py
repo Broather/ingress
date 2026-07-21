@@ -26,7 +26,11 @@ class Portal:
     """represents a point on Earth's surface"""
     def __init__(self, label: str, lat: float, lng: float, value: int = -1) -> None:
         self.label = label.replace(' ', '_')
+        if not (-90 <= lat <= 90):
+            raise ValueError("Given lattitude is out of bounds when creating portal")
         self.lat = lat
+        if not (-180 <= lng <= 180):
+            raise ValueError("Given longitude is out of bounds when creating portal")
         self.lng = lng
         self.value = value
 
@@ -39,7 +43,7 @@ class Portal:
         return False
 
     def __repr__(self) -> str:
-        return f"{self.label}"
+        return f"Portal({self.label})"
 
     def get_label(self) -> str:
         return self.label
