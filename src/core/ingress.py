@@ -142,19 +142,25 @@ class Portal:
 
 class Link:
     def __init__(self, frm: Portal, to: Portal, level: int = 0) -> None:
-        self.portals: tuple[Portal, Portal] = (frm, to)
+        self.frm = frm
+        self.to = to
+        self.portals: tuple[Portal, Portal] = (self.frm, self.to)
         self.level: int = level
 
     def __repr__(self) -> str:
+        # Portal(JBO)
+        # Portal(NRMC)
+        # Link(JBO -> NRMC)
+        # Field(JBO, NRMC, OBJ)
         return f"Link{self.portals}"
 
     def __hash__(self) -> int:
         return hash(self.portals)
 
     def __eq__(self, other: object) -> bool:
-        """return True if other is a Link object with the same portals as self, otherwise False"""
         if isinstance(other, Link):
-            return self.__hash__() == hash(other.portals) or self.__hash__() == hash(other.portals[::-1])
+            p1, p2 = other.portals
+            return p1 in self.portals and p2 in self.portals
         return False
 
     def get_portals(self) -> tuple[Portal, Portal]:
@@ -244,6 +250,12 @@ class Field:
         self.split_portal = None
         self.children: list[Field] = []
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Field):
+            p1, p2, p3 = other.portals
+            return p1 in self.portals and p2 in self.portals and p3 in self.portals
+        return False
+
     def __repr__(self) -> str:
         return f"Field{self.portals}"
 
@@ -310,9 +322,7 @@ class Field:
         s = sum(sides) / 2
 
         # Heron's formula for area of a triangle
-        area = math.sqrt(s * (s - sides[0]) * (s - sides[1]) * (s - sides[2]))
-
-        return area
+        return math.sqrt(s * (s - sides[0]) * (s - sides[1]) * (s - sides[2]))
 
     def get_level(self) -> int:
         return self.level
@@ -333,7 +343,7 @@ class Field:
         """return True if field has portals within it, otherwise False"""
         return len(self.get_portals()) > 0
 
-    def is_in(self, portal: Portal) -> bool:
+    def is_in(self, portal_in_question: Portal) -> bool:
         """Check if a Portal is under Field (self) (made by GPT-3.5)"""
         def sign(p1: Portal, p2: Portal, p3: Portal):
             return (p1.lat - p3.lat) * (p2.lng - p3.lng) - (p2.lat - p3.lat) * (p1.lng - p3.lng)
@@ -351,9 +361,9 @@ class Field:
         assert a.lat != c.lat or a.lng != c.lng, f"ERROR: Field has 2 Portals in the same location: ({a} and {c})"
         assert b.lat != c.lat or b.lng != c.lng, f"ERROR: Field has 2 Portals in the same location: ({b} and {c})"
 
-        d1 = sign(portal, a, b)
-        d2 = sign(portal, b, c)
-        d3 = sign(portal, c, a)
+        d1 = sign(portal_in_question, a, b)
+        d2 = sign(portal_in_question, b, c)
+        d3 = sign(portal_in_question, c, a)
 
         if d1 * d2 * d3 == 0.0:
             return False
@@ -364,7 +374,7 @@ class Field:
         if (not has_neg and not has_pos):
             return True
 
-        w1, w2, w3 = barycentric_coordinates(portal, a, b, c)
+        w1, w2, w3 = barycentric_coordinates(portal_in_question, a, b, c)
         return (w1 >= 0) and (w2 >= 0) and (w3 >= 0)
 
     def homogen(self) -> Portal:
@@ -656,7 +666,10 @@ class Ingress:
     # TODO: these flatten functions could combine into one using genereics (requres python 3.12)
     @staticmethod
     def flatten_iterables(*args: Iterable) -> list:
-        return list(element for iterable in args for element in iterable)
+        # TODO: do this recursively for some really nested lists
+        return list(element 
+                    for iterable in args 
+                    for element in iterable)
     @staticmethod
     def flatten_iterable_of_tuples(iterable: Iterable) -> tuple:
         return tuple(element for tuple in iterable for element in tuple)
