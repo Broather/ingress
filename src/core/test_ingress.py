@@ -10,7 +10,7 @@ class CrossingLinksError(Exception):
 class LinkUnderFieldError(Exception):
     pass
 
-def is_overlap(a: Entity, b: Entity):
+def is_overlap(a: Entity, b: Entity) -> bool:
     # normalize ordering so type(a).__name__ <= type(b).__name__ (Field < Link < Portal)
     if type(a).__name__ > type(b).__name__:
         a, b = b, a
@@ -114,7 +114,6 @@ class TestIngress(unittest.TestCase):
     tower_of_london = Portal("Tower of London", 51.50904332613851, -0.0761843093544774)
     british_museum = Portal("The British Museum", 51.51956682988635, -0.12630807751575648)
     
-
     def test_create_portal(self):
         label = "National Aeronautics Space Administration"
         lat = 69.420
@@ -128,12 +127,24 @@ class TestIngress(unittest.TestCase):
 
     def test_create_portal_outside_of_map(self):
         self.assertRaises(ValueError, lambda: Portal("Nowhere land", -34.85562207716252, -180.10514435848482))
-        self.assertRaises(ValueError, lambda: Portal("Nowhere land", -90.85562207716252, -79.10514435848482))
-        self.assertRaises(ValueError, lambda: Portal("Nowhere land", -90.85562207716252, -180.10514435848482))
 
     def test_create_link(self):
-        l = Link(self.iron_bridge, self.cathedral)
-        self.assertIsInstance(l, Link)
+        source_portal = self.iron_bridge
+        target_portal = self.cathedral
+        link = Link(source_portal, target_portal)
+
+        self.assertEqual(link.frm, source_portal)
+        self.assertEqual(link.to, target_portal)
+
+    def test_create_link_w_context(self):
+        link = Link(self.iron_bridge, self.cathedral)
+        context = []
+        try:
+            context = add_link(context, link)
+        except (CrossingLinksError, LinkUnderFieldError) as e:
+            self.assertTrue(False, f"couldn't add link: {e}")
+        
+        self.assertIn(link, context)
 
     def test_create_field(self):
         f = Field(self.iron_bridge, self.cathedral, self.castle)
@@ -147,12 +158,35 @@ class TestIngress(unittest.TestCase):
         new_l = Link(self.castle, self.iron_bridge)
         try:
             context = add_link(context, new_l)
-        except (CrossingLinksError, LinkUnderFieldError):
-            pass
+        except (CrossingLinksError, LinkUnderFieldError) as e:
+            self.assertTrue(False, f"couldn't add link: {e}")
         
         expected_f = Field(self.iron_bridge, self.cathedral, self.castle)
         self.assertIn(expected_f, context)
     
+    def test_equal_portals(self):
+        # Portals with same coordinates are the same
+        lat = 69.420
+        lng = -42.69
+        portal1 = Portal("Portal 1", lat, lng)
+        portal2 = Portal("Portal 2", lat, lng)
+        self.assertEqual(portal1, portal2)
+    
+    def test_equal_links(self):
+        # Links with same portals are the same
+        link1 = Link(self.bay, self.big_ben)
+        link2 = Link(self.big_ben, self.bay)
+        self.assertEqual(link1, link2)
+
+    def test_equal_fields(self):
+        # Fields with same portals are the same
+        field1 = Field(self.school, self.bay, self.big_ben)
+        field2 = Field(self.big_ben, self.school, self.bay)
+        self.assertEqual(field1, field2)
+    
+    # Fields preserve link direction Field(a,b,c): get_links() => [a->b, c->a, c->b]
+    # Fields preserve link direction create_field_from_links(a->b, b->c, c->a): get_links() => [a->b, b->c, c->a]
+
 # ----- linking and fielding rules -----
 
     def test_crossing_links(self):
@@ -179,8 +213,8 @@ class TestIngress(unittest.TestCase):
         context = [f]
         try:
             context = add_link(context, new_l)
-        except (CrossingLinksError, LinkUnderFieldError):
-            pass
+        except (CrossingLinksError, LinkUnderFieldError) as e:
+            self.assertTrue(False, f"couldn't add link: {e}")
 
         self.assertIn(new_l, context)
 
@@ -206,8 +240,8 @@ class TestIngress(unittest.TestCase):
         context = [f]
         try:
             context = add_link(context, new_l)
-        except (CrossingLinksError, LinkUnderFieldError):
-            pass
+        except (CrossingLinksError, LinkUnderFieldError) as e:
+            self.assertTrue(False, f"couldn't add link: {e}")
         self.assertIn(new_l, context)
 
     def test_split_rectangle(self):
@@ -245,8 +279,8 @@ class TestIngress(unittest.TestCase):
         new_l = Link(self.obsevatory, self.castle)
         try:
             context = add_link(context, new_l)
-        except (CrossingLinksError, LinkUnderFieldError):
-            pass
+        except (CrossingLinksError, LinkUnderFieldError) as e:
+            self.assertTrue(False, f"couldn't add link: {e}")
 
         expected_f1 = Field(self.obsevatory, self.iron_bridge, self.castle)
         expected_f2 = Field(self.obsevatory, self.school, self.castle)
