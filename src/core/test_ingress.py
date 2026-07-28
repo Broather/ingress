@@ -116,7 +116,15 @@ class TestIngress(unittest.TestCase):
     
 
     def test_create_portal(self):
-        self.assertIsInstance(self.iron_bridge, Portal)
+        label = "National Aeronautics Space Administration"
+        lat = 69.420
+        lng = 133.7
+        portal = Portal(label, lat, lng)
+
+        self.assertIsInstance(portal, Portal)
+        self.assertEqual(portal.label, "NASA")
+        self.assertEqual(portal.lat, lat)
+        self.assertEqual(portal.lng, lng)
 
     def test_create_portal_outside_of_map(self):
         self.assertRaises(ValueError, lambda: Portal("Nowhere land", -34.85562207716252, -180.10514435848482))

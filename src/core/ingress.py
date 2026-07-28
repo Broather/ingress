@@ -22,10 +22,15 @@ def my_translate(value, from_min, from_max, to_min, to_max):
     # Convert the 0-1 range into a value in the right range.
     return to_min + (value_scaled * right_span)
 
+def to_acronym(phrase: str) -> str:
+    # "Great Teacher Onizuka" => "GTO"
+    return "".join(word[0].upper() for word in phrase.split(" "))
+
 class Portal:
     """represents a point on Earth's surface"""
     def __init__(self, label: str, lat: float, lng: float, value: int = -1) -> None:
-        self.label = label.replace(' ', '_')
+        # Statue of a Cow => SOAC
+        self.label = to_acronym(label)
         if not (-90 <= lat <= 90):
             raise ValueError("Given lattitude is out of bounds when creating portal")
         self.lat = lat
@@ -148,11 +153,7 @@ class Link:
         self.level: int = level
 
     def __repr__(self) -> str:
-        # Portal(JBO)
-        # Portal(NRMC)
-        # Link(JBO -> NRMC)
-        # Field(JBO, NRMC, OBJ)
-        return f"Link{self.portals}"
+        return f"Link({self.frm.label} -> {self.to.label})"
 
     def __hash__(self) -> int:
         return hash(self.portals)
@@ -246,6 +247,7 @@ class Field:
     """represents an area between 3 distinct points on Earth's surface"""
     def __init__(self, p1: Portal, p2: Portal, p3: Portal, level: int = 0) -> None:
         self.portals: tuple[Portal, Portal, Portal] = (p1,p2,p3)
+        # TODO: preserve link directions
         self.level: int = level
         self.split_portal = None
         self.children: list[Field] = []
@@ -257,7 +259,7 @@ class Field:
         return False
 
     def __repr__(self) -> str:
-        return f"Field{self.portals}"
+        return f"Field({", ".join(portal.label for portal in self.portals)})"
 
     @staticmethod
     def from_links(l1: Link, l2: Link, l3: Link):
