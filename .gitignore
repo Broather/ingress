@@ -3,6 +3,7 @@ __pycache__
 venv
 
 *.json
+!shapemap.json
 *.png
 
 gif_source

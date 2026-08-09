@@ -1,47 +1,73 @@
+import json
 import unittest
-from ingress import Portal
+from ingress import Portal, Field
 
-def match(self, shape, portals):
+Shape = tuple[str, list[list[int]]]
+
+def match(shape, portals) -> bool:
     # helper function to find shape in portals
+    if portals is None or len(portals) == 0:
+        return False
+    shape_name, points = shape
+    print(f'finding shape "{shape_name}" in {len(portals)} portal(-s)')
     return True
 
-def no_match(self, shape, portals):
-    # helper function to find shape in portals
-    return True
+def shape_map(grid_size: int, shape_name: str) -> Shape:
+    # helper function to get a shape from shapemap.json
+    grids: list[dict] = []
+    with open("src/core/shapemap.json", "r") as f:
+        grids = json.load(f)
 
-class TestFindshape(unittest.TestCase):
+    if len(grids) == 0:
+        raise Exception("no grids? *megamind meme picture*")
+
+    grids = list(filter(lambda grid: grid.get("grid") == grid_size, grids))
+
+    assert len(grids) != 0, f"can't find grid of size {grid_size}"
+    grid: dict[str, list[list[int]]] = grids[0]
+    
+    assert shape_name in grid, f"shape {shape_name} doesn't exist in grid of size {grid_size}"
+    return (shape_name, grid.get(shape_name, []))
+    
+class TestFindShape(unittest.TestCase):
+    portals = [
+        Portal("", 69, 169)
+    ]
+    shape = shape_map(5, "1")
+
     def test_no_match(self):
         # try to find shape from no points
-        pass
+        self.assertFalse(match(self.shape, []))
+        
     def test_translated_match(self):
         # define reasonable offset
         # put the shape’s points on the map
         pass
     def test_translated_match_in_portals(self):
-        assert no_match(self, 69, 420)
+        self.assertFalse(match(self.shape, []))
         # define reasonable offset with range(5) variation that overlaps portals
         # define reasonable scale
         # put the shape’s points on the map overlapping other portals
-        assert match(self, 69, 420)
+        self.assertTrue(match(self.shape, [420]))
     def test_rotated_match(self):
         # define reasonable offset
         # define rotation with range(1, 360, 10) variation
         # put the shape’s points on the map
         pass
     def test_rotated_match_in_portals(self):
-        assert no_match(self, 69, 420)
+        self.assertFalse(match(self.shape, []))
         # define reasonable offset that overlaps portals
         # define reasonable scale
         # define rotation with range(1, 360, 10) variation
         # put the shape’s points on the map overlaping other portals
-        assert match(self, 69, 420)
+        self.assertTrue(match(self.shape, [420]))
         pass
     def test_scaled_match_in_portals(self):
-        assert no_match(self, 69, 420)
+        self.assertFalse(match(self.shape, []))
         # define offset that overlaps with portals
         # define scale with reasonable * range(5) variation
         # put the shape’s points on the map overlaping other portals
-        assert match(self, 69, 420)
+        self.assertTrue(match(self.shape, [420]))
         pass
     def test_translated_rotated_match_in_portals(self):
         pass

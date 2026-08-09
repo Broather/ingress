@@ -23,6 +23,8 @@ def my_translate(value, from_min, from_max, to_min, to_max):
     return to_min + (value_scaled * right_span)
 
 def to_acronym(phrase: str) -> str:
+    if len(phrase) == 0:
+        return ""
     # "Great Teacher Onizuka" => "GTO"
     return "".join(word[0].upper() for word in phrase.split(" "))
 
