@@ -433,6 +433,15 @@ class Field:
                 Field(*l2.get_portals(), split_portal, self.get_level() + 1),
                 Field(*l3.get_portals(), split_portal, self.get_level() + 1))
 
+def bounding_box(portals: list[Portal]):
+    assert len(portals) >= 2, "bounding box requires at least 2 portals"
+    lattitudes = tuple(map(lambda p: p.lat, portals))
+    longitudes = tuple(map(lambda p: p.lng, portals))
+    bottom_right = Portal("", min(lattitudes), max(longitudes))
+    top_left = Portal("", max(lattitudes), min(longitudes))
+
+    return (top_left, bottom_right)
+
 class BoundingBox:
     def __init__(self, objects: list, grow_to_square: bool = False, padding: bool = False):
         # TODO: add some debugging squares or something to see how it's growing to square in different situations

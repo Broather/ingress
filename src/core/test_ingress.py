@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 import unittest
-from ingress import Portal, Link, Field, Ingress
+from ingress import Portal, Link, Field, Ingress, to_acronym, bounding_box
 from itertools import combinations
 
 type Entity = Portal | Link | Field
@@ -121,9 +121,18 @@ class TestIngress(unittest.TestCase):
         portal = Portal(label, lat, lng)
 
         self.assertIsInstance(portal, Portal)
-        self.assertEqual(portal.label, "NASA")
+        self.assertEqual(to_acronym(portal.label), "NASA")
         self.assertEqual(portal.lat, lat)
         self.assertEqual(portal.lng, lng)
+
+    def test_bounding_box(self):
+            portals = [
+                Portal("", 69, 169),
+                Portal("", 42, 142)
+            ]
+            tl, br = bounding_box(portals)
+            self.assertEqual(tl, Portal("", 69, 142))
+            self.assertEqual(br, Portal("", 42, 169))
 
     def test_create_portal_outside_of_map(self):
         self.assertRaises(ValueError, lambda: Portal("Nowhere land", -34.85562207716252, -180.10514435848482))
