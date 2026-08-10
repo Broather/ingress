@@ -32,9 +32,9 @@ class Portal:
     """represents a point on Earth's surface"""
     def __init__(self, label: str, lat: float, lng: float, value: int = -1) -> None:
         # Statue of a Cow => SOAC
-        self.label = to_acronym(label)
+        self.label = label
         if not (-90 <= lat <= 90):
-            raise ValueError("Given lattitude is out of bounds when creating portal")
+            raise ValueError("lattitude out of bounds when creating portal")
         self.lat = lat
         if not (-180 <= lng <= 180):
             raise ValueError("Given longitude is out of bounds when creating portal")
@@ -49,8 +49,12 @@ class Portal:
             return self.lat == other.lat and self.lng == other.lng
         return False
 
+    def __add__(self, other: Portal):
+        assert isinstance(other, Portal), f"unsupported operation '+' between {type(self)} and {type(other)}"
+        return Portal(self.label + other.label, self.lat + other.lat, self.lng + other.lng)    
+
     def __repr__(self) -> str:
-        return f"Portal({self.label})"
+        return f"Portal({to_acronym(self.label)})"
 
     def get_label(self) -> str:
         return self.label
@@ -155,7 +159,7 @@ class Link:
         self.level: int = level
 
     def __repr__(self) -> str:
-        return f"Link({self.frm.label} -> {self.to.label})"
+        return f"Link({to_acronym(self.frm.label)} -> {to_acronym(self.to.label)})"
 
     def __hash__(self) -> int:
         return hash(self.portals)
@@ -261,7 +265,7 @@ class Field:
         return False
 
     def __repr__(self) -> str:
-        return f"Field({", ".join(portal.label for portal in self.portals)})"
+        return f"Field({", ".join(to_acronym(portal.label) for portal in self.portals)})"
 
     @staticmethod
     def from_links(l1: Link, l2: Link, l3: Link):
