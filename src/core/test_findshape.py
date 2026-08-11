@@ -1,5 +1,6 @@
 import json
 import unittest
+import testdata
 from ingress import Portal, bounding_box
 
 class Shape():
@@ -35,15 +36,18 @@ def shape_map(shapemap_string: str, grid_size: int, shape_name: str) -> Shape:
 def new_map():
     points_on_map = []
     
-    def inner(shape: Shape|list[Portal], scale: float = 1, rotation: int = 0):
-        if isinstance(shape, list):
+    def inner(shape: Shape|list[Portal], origin: Portal|None = None, scale: float = 1, rotation: int = 0):
+        if isinstance(shape, list) and all(map(lambda o: isinstance(o, Portal), shape)):
+            # TODO: could use origin to translate all portals to a certain place
             points_on_map.extend(shape)
             return points_on_map
         elif isinstance(shape, Shape):
             assert len(points_on_map) >= 2, "overlay requires at least 2 points on the map"
             tl, br = bounding_box(points_on_map)
-            shape_size = min(abs(tl.lat - br.lat), abs(tl.lng - br.lng)) * scale
-            mapped_points = map(lambda coords: tl + Portal("", -1 * coords[0] * shape_size/shape.grid_size, coords[1] * shape_size/shape.grid_size), shape.points)
+            cell_size = min(abs(tl.lat - br.lat), abs(tl.lng - br.lng)) * scale/shape.grid_size
+
+            if not origin: origin = tl
+            mapped_points = map(lambda coords: origin + Portal("", -1 * coords[0] * cell_size, coords[1] * cell_size), shape.points)
             points_on_map.extend(mapped_points)
             return points_on_map
         else:
@@ -52,27 +56,34 @@ def new_map():
     return inner
 
 class TestFindShape(unittest.TestCase):
-    village_portals = [
-        Portal("", 69, 169),
-        Portal("", 42, 142)
-    ]
+    town_portals = testdata.matlock
+    
     with open("src/core/shapemap.json", "r") as f:
         shape = shape_map(f.read(), 5, "1")
 
     def test_no_portals(self):
-        # try to find shape from no points
+        # fail to find shape from no points
         self.assertFalse(match(self.shape, []))
 
     def test_no_match_in_points(self):
         # fail to find shape from points on map until the shape's points get overlaid
-        overlay = new_map()
-        self.assertFalse(match(self.shape, overlay(self.village_portals)))
-        self.assertTrue(match(self.shape, overlay(self.shape)))
+        test_map = new_map()
+        self.assertFalse(match(self.shape, test_map(self.town_portals)))
+        self.assertTrue(match(self.shape, test_map(self.shape)))
         
+    @unittest.skip("not implemented")
     def test_translated_match(self):
         # define reasonable offset
         # put the shape’s points on the map
-        pass
+        test_map = new_map()
+        portals = test_map(self.town_portals)
+        self.assertFalse(match(self.shape, portals))
+
+        tl, br = bounding_box(portals)
+        middle = tl.find_middle(br)
+
+        self.assertTrue(match(self.shape, test_map(self.shape, origin=middle, scale=.5)))
+
     def test_translated_match_in_portals(self):
         # define reasonable offset with range(5) variation that overlaps portals
         # define reasonable scale
