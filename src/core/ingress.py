@@ -28,6 +28,20 @@ def to_acronym(phrase: str) -> str:
     # "Great Teacher Onizuka" => "GTO"
     return "".join(word[0].upper() for word in phrase.split(" "))
 
+class Shape():
+    def __init__(self, grid_size: int, points: list[list[int]]) -> None:
+        self.grid_size = grid_size
+        self.points = points
+
+    def __repr__(self) -> str:
+        result = ""
+        for y in range(self.grid_size):
+            for x in range(self.grid_size):
+                if [x,y] in self.points: result += "#" 
+                else: result += "."
+            result += "\n"
+        return result
+
 class Portal:
     """represents a point on Earth's surface"""
     def __init__(self, label: str, lat: float, lng: float, value: int = -1) -> None:

@@ -98,7 +98,7 @@ def is_loop(link1, link2, link3):
     return is_overlap(link1, link2) and is_overlap(link2, link3) and is_overlap(link3, link1)  
 
 class TestIngress(unittest.TestCase):
-    # lotations from tom scotts series where he makes a video about each province in the uk
+    # lotations from Tom Scott's series where he makes a video in each province of the uk
     obsevatory = Portal("Jodrel Bank Observatory", 53.24227460218302, -2.3063232907714215)
     castle = Portal("Warwick Castle", 52.27838196580572, -1.5880068312555011)
     iron_bridge = Portal("Iron Bridge", 52.62751740320499, -2.4850676907714218)
@@ -121,7 +121,7 @@ class TestIngress(unittest.TestCase):
         portal = Portal(label, lat, lng)
 
         self.assertIsInstance(portal, Portal)
-        self.assertEqual(to_acronym(portal.label), "NASA")
+        self.assertEqual(portal.__repr__(), "Portal(NASA)")
         self.assertEqual(portal.lat, lat)
         self.assertEqual(portal.lng, lng)
 
@@ -136,6 +136,7 @@ class TestIngress(unittest.TestCase):
 
     def test_create_portal_outside_of_map(self):
         self.assertRaises(ValueError, lambda: Portal("Nowhere land", -34.85562207716252, -180.10514435848482))
+        self.assertRaises(ValueError, lambda: Portal("Nowhere land", -90.85562207716252, -34.10514435848482))
 
     def test_create_link(self):
         source_portal = self.iron_bridge

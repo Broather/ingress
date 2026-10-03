@@ -1,29 +1,24 @@
 import json
 import unittest
 import testdata
-from ingress import Portal, bounding_box
+from ingress import Portal, bounding_box, Shape
 
-class Shape():
-    def __init__(self, grid_size: int, points: list[list[int]]) -> None:
-        self.grid_size = grid_size
-        self.points = points
-
-def find(shape: Shape, portals: list[Portal]) -> tuple:
-    return tuple()
+def find(shape: Shape, portals: list[Portal], fixed_rotation = False):
+    pass
 
 def match(shape: Shape, portals: list[Portal]) -> bool:
     # helper function to find shape in portals
     if portals is None or len(portals) == 0:
         return False
     
-    print(f'finding shape /w {len(shape.points)} points in {len(portals)} portal(-s)')
+    # print(f'finding shape /w {len(shape.points)} points in {len(portals)} portal(-s)')
     return bool(find(shape, portals))
 
-def shape_map(shapemap_string: str, grid_size: int, shape_name: str) -> Shape:
+def get_shape(shapemap_string: str, grid_size: int, shape_name: str) -> Shape:
     # helper function to get a shape from shapemap JSON string
     grids: list[dict] = json.loads(shapemap_string)
     assert isinstance(grids, list), "shape map expected to contain list as root element"
-    assert len(grids) > 0, "no grids? *megamind meme picture*"
+    assert len(grids) > 0, "no grids? *megamind meme*"
 
     filtered_grids = list(filter(lambda grid: grid.get("grid") == grid_size, grids))
     assert len(filtered_grids) != 0, f"can't find grid of size {grid_size}"
@@ -57,15 +52,27 @@ def new_map():
 
 class TestFindShape(unittest.TestCase):
     town_portals = testdata.matlock
-    
-    with open("src/core/shapemap.json", "r") as f:
-        shape = shape_map(f.read(), 5, "1")
+    shape = testdata.square
+
+    def test_create_shape(self):
+        square = Shape(4, [[1,1], [2,1], [2,2], [1,2]])
+        self.assertEqual(square.__repr__(), "....\n.##.\n.##.\n....\n")
+
+    def test_get_shape(self):
+        shapemap = """[{
+        "grid": 4,
+        "square": [[1,1], [2,1], [2,2], [1,2]]
+    }]"""
+        square = get_shape(shapemap, 4, "square")
+        self.assertEqual(square.__repr__(), "....\n.##.\n.##.\n....\n")
 
     def test_no_portals(self):
         # fail to find shape from no points
-        self.assertFalse(match(self.shape, []))
+        test_map = new_map()
+        self.assertFalse(match(self.shape, test_map([])))
 
-    def test_no_match_in_points(self):
+    @unittest.skip("not implemented")
+    def test_match(self):
         # fail to find shape from points on map until the shape's points get overlaid
         test_map = new_map()
         self.assertFalse(match(self.shape, test_map(self.town_portals)))
@@ -84,7 +91,7 @@ class TestFindShape(unittest.TestCase):
 
         self.assertTrue(match(self.shape, test_map(self.shape, origin=middle, scale=.5)))
 
-    def test_translated_match_in_portals(self):
+    def test_translated_match_in_town(self):
         # define reasonable offset with range(5) variation that overlaps portals
         # define reasonable scale
         # put the shape’s points on the map overlapping other portals
@@ -94,39 +101,39 @@ class TestFindShape(unittest.TestCase):
         # define rotation with range(1, 360, 10) variation
         # put the shape’s points on the map
         pass
-    def test_rotated_match_in_portals(self):
+    def test_rotated_match_in_town(self):
         # define reasonable offset that overlaps portals
         # define reasonable scale
         # define rotation with range(1, 360, 10) variation
         # put the shape’s points on the map overlaping other portals
         pass
-    def test_scaled_match_in_portals(self):
+    def test_scaled_match_in_town(self):
         # define offset that overlaps with portals
         # define scale with reasonable * range(5) variation
         # put the shape’s points on the map overlaping other portals
         pass
-    def test_translated_rotated_match_in_portals(self):
+    def test_translated_rotated_match_in_town(self):
         pass
-    def test_rotated_scaled_match_in_portals(self):
+    def test_rotated_scaled_match_in_town(self):
         pass
-    def test_translated_scaled_match_in_portals(self):
+    def test_translated_scaled_match_in_town(self):
         pass
     def test_noise(self):
         # each point in shape is slightly moved before placed on map
         pass
-    def test_noise_in_portals(self):
+    def test_noise_in_town(self):
         # each point in shape is slightly moved before placed on map overlaping other portals
         pass
-    def test_noise_translated_rotated_match_in_portals(self):
+    def test_noise_translated_rotated_match_in_town(self):
         pass
-    def test_noise_rotated_scaled_match_in_portals(self):
+    def test_noise_rotated_scaled_match_in_town(self):
         pass
-    def test_noise_translated_scaled_match_in_portals(self):
+    def test_noise_translated_scaled_match_in_town(self):
         pass
     def test_mirrored_shape(self):
         # do a negative scale
         pass
-    def test_mirrored_shape_in_portals(self):
+    def test_mirrored_shape_in_town(self):
         # do a negative scale
         pass
     def test_valid_shape_map(self):

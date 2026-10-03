@@ -1,5 +1,7 @@
-from ingress import Portal
+from ingress import Portal, Shape
 
+square = Shape(4, [[1,1], [2,1], [2,2], [1,2]])
+# Matlock, a town in England
 matlock = [
     Portal("Ancient Mile Stone", 53.129095, -1.559879),
     Portal("Riber Castle", 53.128561, -1.542881),
